@@ -79,4 +79,4 @@ class financial_GAN(object):
 
 if __name__ == '__main__':
 	fingan = financial_GAN()
-	fingan.train()
+	fingan.discriminator.train()
