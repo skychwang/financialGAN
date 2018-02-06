@@ -73,7 +73,7 @@ class financial_GAN(object):
 		#noise_input = np.random.uniform(-1.0, 1.0, size=[16, 100])
 		
 		self.discriminator.fit(self.x_train, self.y_train, epochs=1000, batch_size=64, validation_data=(self.x_test, self.y_test))
-		self.save_weights('test.h5')
+		self.discriminator.save_weights('test.h5')
 
 
 
