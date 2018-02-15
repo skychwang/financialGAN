@@ -7,15 +7,15 @@ from keras.layers import (Conv2D, MaxPooling2D, Dropout, Input, Activation, Flat
 from keras.optimizers import RMSprop
 from randomOrderGenerator import (randomOrderGenerator, randomLabelGenerator)
 
+import pdb
+
 class GAN(object):
-	def __init__(self, orderLength=50, orderStreamSize=100, filterSize=(3, 3), poolSize=(2,2), numFilters=32, dropout=0.1):
+	def __init__(self, orderLength=50, orderStreamSize=100):
+		# Orderstream dimensions init
 		self.orderLength = orderLength
 		self.orderStreamSize = orderStreamSize
-		self.filterSize = filterSize
-		self.poolSize = poolSize
-		self.numFilters = numFilters
-		self.dropout = dropout
 
+		# init
 		self.D = None
 		self.G = None
 		self.AM = None
@@ -25,13 +25,16 @@ class GAN(object):
 		if self.D:
 			return self.D
 
+		# discriminator vars init
+		dropout = 0.1
+
 		# model definition
 		self.D = Sequential()
-		self.D.add(Conv2D(self.numFilters, self.filterSize, activation='relu', input_shape=(self.orderLength, self.orderStreamSize, 1)))
-		self.D.add(MaxPooling2D(pool_size=self.poolSize))
-		self.D.add(Dropout(self.dropout))
+		self.D.add(Conv2D(32, (3, 3), activation='relu', input_shape=(self.orderLength, self.orderStreamSize, 1)))
+		self.D.add(MaxPooling2D(pool_size=(2, 2)))
+		self.D.add(Dropout(dropout))
 
-		# GAN discriminator
+		# discriminator output - 1-dimensional probability
 		self.D.add(Flatten())
 		self.D.add(Dense(1))
 		self.D.add(Activation('sigmoid'))
@@ -44,7 +47,7 @@ class GAN(object):
 		if self.DM:
 			return self.DM
 
-		optimizer = RMSprop(lr=0.0002, decay=6e-8)
+		optimizer = RMSprop()
 		self.DM = Sequential()
 		self.DM.add(self.discriminator())
 		self.DM.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
@@ -54,8 +57,10 @@ class GAN(object):
 		if self.G:
 			return self.G
 
-		# In: uniform dist size (100)
-		# Out: order stream size (orderStreamSize, orderLength, 1)
+		# generator input - uniform distribution, size (100)
+
+		# generator vars init
+		dropout = 0.1
 
 		# generator definition
 		self.G = Sequential()
@@ -63,10 +68,11 @@ class GAN(object):
 		self.G.add(BatchNormalization())
 		self.G.add(Activation('relu'))
 		self.G.add(Reshape((1, 1, 1)))
-		self.G.add(Dropout(self.dropout))
+		self.G.add(Dropout(dropout))
 
+		# generator output - orderstream, size (orderStreamSize, orderLength, 1)
 		self.G.add(UpSampling2D(size=(self.orderLength, self.orderStreamSize)))
-		self.G.add(Activation('sigmoid'))
+		self.G.add(Activation('linear'))
 
 		self.G.summary()
 
@@ -76,11 +82,12 @@ class GAN(object):
 		if self.AM:
 			return self.AM
 
-		optimizer=RMSprop(lr=0.0001, decay=3e-8)
+		# Stacked, generator model onto the discriminator
+		optimizer=RMSprop(lr=1)
 		self.AM = Sequential()
 		self.AM.add(self.generator())
 		self.AM.add(self.discriminator())
-		self.AM.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+		self.AM.compile(loss='binary_crossentropy', optimizer=optimizer)
 		return self.AM
 
 
@@ -89,14 +96,11 @@ class financial_GAN(object):
 		self.orderLength = 50
 		self.orderStreamSize = 100
 
-		# TEMP for random orders
+		# Random orderstream
 		self.numGenerate = 10000
-		self.numTest = 1000
 		self.x_train = next(randomOrderGenerator(self.numGenerate, self.orderStreamSize, self.orderLength))
-		#self.y_train = next(randomLabelGenerator(self.numGenerate))
-		#self.x_test = next(randomOrderGenerator(self.numTest, self.orderStreamSize, self.orderLength))
-		#self.y_test = next(randomLabelGenerator(self.numTest))
 
+		# init
 		self.GAN = GAN()
 		self.discriminator = self.GAN.discriminator_model()
 		self.adversarial = self.GAN.adversarial_model()
@@ -107,25 +111,26 @@ class financial_GAN(object):
 			orderStreams_train = self.x_train[np.random.randint(0, self.x_train.shape[0], size=batch_size), :, :, :]
 			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
 			orderStreams_fake = self.generator.predict(noise)
-
 			x = np.concatenate((orderStreams_train, orderStreams_fake))
 			y = np.ones([2*batch_size, 1])
 			y[batch_size:, :] = 0
-			d_loss = self.discriminator.train_on_batch(x, y)
 
+			#print(x[257])
+
+			d_loss = self.discriminator.train_on_batch(x, y)
 			y = np.ones([batch_size, 1])
 			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
+			self.discriminator.trainable = False
 			a_loss = self.adversarial.train_on_batch(noise, y)
+			self.discriminator.trainable = True
 
 			log_mesg = "%d: [D loss: %f, acc: %f]" % (i, d_loss[0], d_loss[1])
-			log_mesg = "%s  [A loss: %f, acc: %f]" % (log_mesg, a_loss[0], a_loss[1])
+			log_mesg = "%s  [A loss: %f]" % (log_mesg, a_loss)
 			print(log_mesg)
 
-
-		#self.discriminator.fit(self.x_train, self.y_train, epochs=100, batch_size=64, validation_data=(self.x_test, self.y_test))
-		#self.discriminator.save_weights('test.h5')
-
-
+			if i % 10 == 0:
+				self.discriminator.save_weights('discriminator', True)
+				self.generator.save_weights('generator', True)
 
 if __name__ == '__main__':
 	fingan = financial_GAN()
