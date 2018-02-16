@@ -10,10 +10,10 @@ from randomOrderGenerator import (randomOrderGenerator, randomLabelGenerator)
 import pdb
 
 class GAN(object):
-	def __init__(self, orderLength=50, orderStreamSize=100):
+	def __init__(self, orderStreamSize=100, orderLength=50):
 		# Orderstream dimensions init
-		self.orderLength = orderLength
 		self.orderStreamSize = orderStreamSize
+		self.orderLength = orderLength
 
 		# init
 		self.D = None
@@ -30,7 +30,7 @@ class GAN(object):
 
 		# model definition
 		self.D = Sequential()
-		self.D.add(Conv2D(32, (3, 3), activation='relu', input_shape=(self.orderLength, self.orderStreamSize, 1)))
+		self.D.add(Conv2D(32, (3, 3), activation='relu', input_shape=(self.orderStreamSize, self.orderLength, 1)))
 		self.D.add(MaxPooling2D(pool_size=(2, 2)))
 		self.D.add(Dropout(dropout))
 
@@ -62,16 +62,16 @@ class GAN(object):
 		# generator vars init
 		dropout = 0.1
 
-		# generator definition
+		# generator definition, tempv2
 		self.G = Sequential()
-		self.G.add(Dense(1, input_dim=100))
+		self.G.add(Dense(self.orderStreamSize, input_dim=100))
 		self.G.add(BatchNormalization())
+		self.G.add(Reshape((self.orderStreamSize, 1, 1)))
 		self.G.add(Activation('relu'))
-		self.G.add(Reshape((1, 1, 1)))
 		self.G.add(Dropout(dropout))
 
 		# generator output - orderstream, size (orderStreamSize, orderLength, 1)
-		self.G.add(UpSampling2D(size=(self.orderLength, self.orderStreamSize)))
+		self.G.add(UpSampling2D(size=(1, self.orderLength)))
 		self.G.add(Activation('linear'))
 
 		self.G.summary()
@@ -83,7 +83,7 @@ class GAN(object):
 			return self.AM
 
 		# Stacked, generator model onto the discriminator
-		optimizer=RMSprop(lr=1)
+		optimizer=RMSprop(lr=0.5)
 		self.AM = Sequential()
 		self.AM.add(self.generator())
 		self.AM.add(self.discriminator())
@@ -93,40 +93,38 @@ class GAN(object):
 
 class financial_GAN(object):
 	def __init__(self):
-		self.orderLength = 50
 		self.orderStreamSize = 100
+		self.orderLength = 50
 
 		# Random orderstream
 		self.numGenerate = 10000
 		self.x_train = next(randomOrderGenerator(self.numGenerate, self.orderStreamSize, self.orderLength))
 
 		# init
-		self.GAN = GAN()
+		self.GAN = GAN(orderStreamSize=self.orderStreamSize, orderLength=self.orderLength)
 		self.discriminator = self.GAN.discriminator_model()
-		self.adversarial = self.GAN.adversarial_model()
 		self.generator = self.GAN.generator()
+		self.adversarial = self.GAN.adversarial_model()
 
 	def train(self, train_steps=1000, batch_size=256):
 		for i in range(train_steps):
-			orderStreams_train = self.x_train[np.random.randint(0, self.x_train.shape[0], size=batch_size), :, :, :]
 			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
+			orderStreams_train = self.x_train[np.random.randint(0, self.x_train.shape[0], size=batch_size), :, :, :]
 			orderStreams_fake = self.generator.predict(noise)
 			x = np.concatenate((orderStreams_train, orderStreams_fake))
 			y = np.ones([2*batch_size, 1])
 			y[batch_size:, :] = 0
-
-			#print(x[257])
-
 			d_loss = self.discriminator.train_on_batch(x, y)
 			y = np.ones([batch_size, 1])
-			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
 			self.discriminator.trainable = False
+			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
 			a_loss = self.adversarial.train_on_batch(noise, y)
 			self.discriminator.trainable = True
 
 			log_mesg = "%d: [D loss: %f, acc: %f]" % (i, d_loss[0], d_loss[1])
 			log_mesg = "%s  [A loss: %f]" % (log_mesg, a_loss)
 			print(log_mesg)
+			#print(x[257])
 
 			if i % 10 == 0:
 				self.discriminator.save_weights('discriminator', True)
