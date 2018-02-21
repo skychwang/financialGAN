@@ -3,7 +3,7 @@ import numpy as np
 from keras import backend as K
 from keras.models import Sequential
 from keras import regularizers
-from keras.layers import (Conv2D, MaxPooling2D, Dropout, Input, Activation, Flatten, Dense, Reshape, UpSampling2D, BatchNormalization)
+from keras.layers import (Conv2D, MaxPooling2D, Conv2DTranspose, Dropout, Input, Activation, Flatten, Dense, Reshape, UpSampling2D, BatchNormalization)
 from keras.optimizers import RMSprop, Adam
 from randomOrderGenerator import (randomOrderGenerator, randomLabelGenerator)
 
@@ -26,7 +26,7 @@ class GAN(object):
 			return self.D
 
 		# discriminator vars init
-		dropout = 0.1
+		dropout = 0.4
 
 		# model definition
 		self.D = Sequential()
@@ -60,19 +60,31 @@ class GAN(object):
 		# generator input - uniform distribution, size (100)
 
 		# generator vars init
-		dropout = 0.1
+		dropout = 0.4
 
-		# generator definition, tempv2
+		# generator definition, v3, optimized for OS size (100, 50)
 		self.G = Sequential()
-		self.G.add(Dense(self.orderStreamSize, input_dim=100))
+		self.G.add(Dense(10*5*400, input_dim=100))
 		self.G.add(BatchNormalization())
-		self.G.add(Reshape((self.orderStreamSize, 1, 1)))
 		self.G.add(Activation('relu'))
+		self.G.add(Reshape((10, 5, 400)))
 		self.G.add(Dropout(dropout))
 
+		self.G.add(UpSampling2D(size=5))
+		self.G.add(Conv2DTranspose(16, 5, padding='same'))
+		self.G.add(BatchNormalization())
+		self.G.add(Activation('relu'))
+		self.G.add(UpSampling2D())
+		self.G.add(Conv2DTranspose(8, 5, padding='same'))
+		self.G.add(BatchNormalization())
+		self.G.add(Activation('relu'))
+		self.G.add(Conv2DTranspose(4, 5, padding='same'))
+		self.G.add(BatchNormalization())
+		self.G.add(Activation('relu'))
+
 		# generator output - orderstream, size (orderStreamSize, orderLength, 1)
-		self.G.add(UpSampling2D(size=(1, self.orderLength)))
-		self.G.add(Activation('linear'))
+		self.G.add(Conv2DTranspose(1, 5, padding='same'))
+		self.G.add(Activation('tanh'))
 
 		self.G.summary()
 
@@ -110,22 +122,23 @@ class financial_GAN(object):
 		return ((((normArray - high) * (maxV - minV))/(high - low)) + maxV)
 
 
-	def train(self, train_steps=1000, batch_size=1024, pretrain_size=10000):
+	def train(self, train_steps=10000, batch_size=64, pretrain_size=10000):
 		# Pretrain 10 epochs
+		"""
 		x = self.normalize(next(randomOrderGenerator(pretrain_size, self.orderStreamSize, self.orderLength)))
 		y = np.ones([pretrain_size, 1])
 		print("\nPretrain of discriminator:\n")
 		self.discriminator.fit(x, y, epochs=10)
+		"""
 
 		# USES TRAIN_ON_BATCH
 		# Real and Generated train
-		"""
 		for i in range(train_steps):
 			## gen noise init
 			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
 			## train/fake init
 			orderStreams_train = self.normalize(next(randomOrderGenerator(batch_size, self.orderStreamSize, self.orderLength)))
-			orderStreams_fake = self.generator.predict(noise)
+			orderStreams_fake = self.normalize(self.denormalize(self.generator.predict(noise)).astype(int)) # effectively concats generated to integers.
 			## data/labels init
 			x = np.concatenate((orderStreams_train, orderStreams_fake))
 			y = np.ones([batch_size*2, 1])
@@ -143,20 +156,22 @@ class financial_GAN(object):
 			log_mesg = "%s  [A loss: %f]" % (log_mesg, a_loss)
 			print(log_mesg)
 
+			#print(self.denormalize(x[65]))
+
 			if i % 10 == 0:
 				self.discriminator.save_weights('discriminator', True)
 				self.generator.save_weights('generator', True)
-		"""
 
 		# USES FIT
 		# Real and Generated train
+		"""
 		for i in range(train_steps):
 			print("\nRound: " + str(i))
 			## gen noise init
 			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
 			## train/fake init
 			orderStreams_train = self.normalize(next(randomOrderGenerator(batch_size, self.orderStreamSize, self.orderLength)))
-			orderStreams_fake = self.generator.predict(noise)
+			orderStreams_fake = self.normalize(self.denormalize(self.generator.predict(noise)).astype(int)) # effectively concats generated to integers.
 			## data/labels init
 			x = np.concatenate((orderStreams_train, orderStreams_fake))
 			y = np.ones([batch_size*2, 1])
@@ -172,9 +187,13 @@ class financial_GAN(object):
 			a_loss = self.adversarial.fit(noise, y, epochs=1)
 			self.discriminator.trainable = True
 
+			#print(self.denormalize(x[129]))
+
 			if i % 10 == 0:
 				self.discriminator.save_weights('discriminator', True)
 				self.generator.save_weights('generator', True)
+		"""
+		
 
 if __name__ == '__main__':
 	fingan = financial_GAN()
