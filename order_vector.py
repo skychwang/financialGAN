@@ -20,8 +20,8 @@ def order_aggregation_one_day(order_filename, time_interval=100):
 
 	time_interval = time_interval #in milliseconds
 	trading_interval = 6.5 * 3600 * 1000
-	#num_intervals = int(trading_interval / time_interval)
-	num_intervals = 200
+	num_intervals = int(trading_interval / time_interval)
+	#num_intervals = 200
 
 	# TO-DO preprocessing to find min_max range 600 1200 900 1500
 	buy_min = 600
