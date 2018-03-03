@@ -133,11 +133,17 @@ class financial_GAN(object):
 
 		# USES TRAIN_ON_BATCH
 		# Real and Generated train
+
+		data = self.normalize(next(randomOrderGenerator(100000, self.orderStreamSize, self.orderLength)))
+		
 		for i in range(train_steps):
 			## gen noise init
 			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
 			## train/fake init
-			orderStreams_train = self.normalize(next(randomOrderGenerator(batch_size, self.orderStreamSize, self.orderLength)))
+			### consecutive random indexes
+			x = np.random.randint(0, data.shape[0] - batch_size)
+			idx = np.linspace(x, x+batch_size, batch_size, endpoint=False, dtype=int) 
+			orderStreams_train = data[idx]
 			orderStreams_fake = self.normalize(self.denormalize(self.generator.predict(noise)).astype(int)) # effectively concats generated to integers.
 			## data/labels init
 			x = np.concatenate((orderStreams_train, orderStreams_fake))
@@ -161,16 +167,20 @@ class financial_GAN(object):
 			if i % 10 == 0:
 				self.discriminator.save_weights('discriminator', True)
 				self.generator.save_weights('generator', True)
-
+		
 		# USES FIT
 		# Real and Generated train
+
 		"""
 		for i in range(train_steps):
 			print("\nRound: " + str(i))
 			## gen noise init
 			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
 			## train/fake init
-			orderStreams_train = self.normalize(next(randomOrderGenerator(batch_size, self.orderStreamSize, self.orderLength)))
+			### consecutive random indexes
+			x = np.random.randint(0, data.shape[0] - batch_size)
+			idx = np.linspace(x, x+batch_size, batch_size, endpoint=False, dtype=int) 
+			orderStreams_train = data[idx]
 			orderStreams_fake = self.normalize(self.denormalize(self.generator.predict(noise)).astype(int)) # effectively concats generated to integers.
 			## data/labels init
 			x = np.concatenate((orderStreams_train, orderStreams_fake))
@@ -187,13 +197,12 @@ class financial_GAN(object):
 			a_loss = self.adversarial.fit(noise, y, epochs=1)
 			self.discriminator.trainable = True
 
-			#print(self.denormalize(x[129]))
+			#print(self.denormalize(x[65]))
 
 			if i % 10 == 0:
 				self.discriminator.save_weights('discriminator', True)
 				self.generator.save_weights('generator', True)
 		"""
-		
 
 if __name__ == '__main__':
 	fingan = financial_GAN()
