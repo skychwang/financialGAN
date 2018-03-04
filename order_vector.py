@@ -8,28 +8,23 @@ import pandas as pd
 
 def order_aggregation_multiple_days():
 	raw_orders = [file for file in os.listdir("RMD/") if file.startswith("PN_Order")]
-	# pdb.set_trace()
 	for raw_order in raw_orders:
 		order_aggregation_one_day(raw_order, time_interval=100)
-	# pdb.set_trace()
 
 
 def order_aggregation_one_day(order_filename, time_interval=100):
 	wb = openpyxl.load_workbook("RMD/" + order_filename)
 	sheet = wb.worksheets[0]
 
-	time_interval = time_interval #in milliseconds
-	trading_interval = 6.5 * 3600 * 1000
-	num_intervals = int(trading_interval / time_interval)
-	#num_intervals = 200
+	time_vector = []
 
 	# TO-DO preprocessing to find min_max range 600 1200 900 1500
 	buy_min = 600
 	buy_max = 1200
-	buy_vector = np.zeros((buy_max - buy_min, num_intervals))
+	buy_vector = []
 	sell_min = 900
 	sell_max = 1500
-	sell_vector = np.zeros((sell_max - sell_min, num_intervals))
+	sell_vector = []
 
 	parse_time = order_filename.split("_")[3].split(".")[0]
 	month = int(parse_time[:2])
@@ -41,33 +36,43 @@ def order_aggregation_one_day(order_filename, time_interval=100):
 	time_end = time_start + datetime.timedelta(microseconds = time_interval * 1000)
 
 	i = 2
-	index = 0
-	#sheet.max_row
+	buy_dict = {}
+	sell_dict = {}
 	while i <= sheet.max_row:
-		if i%5000 == 0:
+		if i%100 == 0:
 			print("processed {} lines".format(i))
+			print(datetime.datetime.strptime(str(sheet["C" + str(i)].value), '%Y/%m/%d %H:%M:%S.%f'))
+			print(time_start)
+			print(time_end)
 		time_stamp = datetime.datetime.strptime(str(sheet["C" + str(i)].value), '%Y/%m/%d %H:%M:%S.%f')
 		if time_stamp < time_start:
 			i = i + 1
 		elif time_start <= time_stamp < time_end:
 			if sheet["P" + str(i)].value != 0:
 				if sheet["G" + str(i)].value == 0 and buy_min <= sheet["Q" + str(i)].value * 100 < buy_max:
-					buy_vector[int(sheet["Q" + str(i)].value * 100 - buy_min), index] = buy_vector[int(sheet["Q" + str(i)].value * 100 - buy_min), index] + \
-					sheet["P" + str(i)].value
+					if int(sheet["Q" + str(i)].value * 100 - buy_min) in buy_dict:
+						buy_dict[int(sheet["Q" + str(i)].value * 100 - buy_min)] += sheet["P" + str(i)].value
+					else:
+						buy_dict[int(sheet["Q" + str(i)].value * 100 - buy_min)] = sheet["P" + str(i)].value
 				elif sheet["G" + str(i)].value == 1 and sell_min <= sheet["Q" + str(i)].value * 100 < sell_max:
-					sell_vector[int(sheet["Q" + str(i)].value * 100 - sell_min), index] = sell_vector[int(sheet["Q" + str(i)].value * 100 - sell_min), index] + \
-					sheet["P" + str(i)].value
+					if int(sheet["Q" + str(i)].value * 100 - sell_min) in sell_dict:
+						sell_dict[int(sheet["Q" + str(i)].value * 100 - sell_min)] += sheet["P" + str(i)].value
+					else:
+						sell_dict[int(sheet["Q" + str(i)].value * 100 - sell_min)] = sheet["P" + str(i)].value
 			i = i + 1
 		else:
-			index = index + 1
+			if len(buy_dict) > 0 or len(sell_dict) > 0:
+				time_vector.append(time_end)
+				buy_vector.append(buy_dict)
+				sell_vector.append(sell_dict)
+			buy_dict = {}
+			sell_dict = {}
 			time_start = time_end
 			time_end = time_start + datetime.timedelta(microseconds = time_interval * 1000)
-	# pdb.set_trace()
-	save_orders_json(save_filename, buy_vector, sell_vector)
 
-def save_orders_json(save_filename, buy_vector, sell_vector):
-    order_dict = {"buy_vector": [buy_vector], "sell_vector": [sell_vector]}
-    df = pd.DataFrame(data=order_dict, columns=["buy_vector", "sell_vector"])
+	save_orders_json(save_filename, time_vector, buy_vector, sell_vector)
+
+def save_orders_json(save_filename, time_vector, buy_vector, sell_vector):
+    order_dict = {"time": time_vector, "buy": buy_vector, "sell": sell_vector}
+    df = pd.DataFrame(data=order_dict, columns=["time", "buy", "sell"])
     df.to_json(path_or_buf=save_filename, orient="records", lines=True)
-
-
