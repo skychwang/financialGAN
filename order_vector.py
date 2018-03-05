@@ -13,9 +13,7 @@ def order_aggregation_multiple_days():
 
 
 def order_aggregation_one_day(order_filename, time_interval=100):
-	wb = openpyxl.load_workbook("RMD/" + order_filename)
-	sheet = wb.worksheets[0]
-
+	sheet = pd.read_excel("RMD/" + order_filename)
 	time_vector = []
 
 	# TO-DO preprocessing to find min_max range 600 1200 900 1500
@@ -35,30 +33,31 @@ def order_aggregation_one_day(order_filename, time_interval=100):
 	time_start = datetime.datetime(year, month, date, 9, 30, 0, 000000)
 	time_end = time_start + datetime.timedelta(microseconds = time_interval * 1000)
 
-	i = 2
+	i = 0
 	buy_dict = {}
 	sell_dict = {}
-	while i <= sheet.max_row:
+	#len(sheet)
+	while i < len(sheet):
 		if i%100 == 0:
 			print("processed {} lines".format(i))
-			print(datetime.datetime.strptime(str(sheet["C" + str(i)].value), '%Y/%m/%d %H:%M:%S.%f'))
+			print(datetime.datetime.strptime(sheet["Time"][i], '%Y/%m/%d %H:%M:%S.%f'))
 			print(time_start)
 			print(time_end)
-		time_stamp = datetime.datetime.strptime(str(sheet["C" + str(i)].value), '%Y/%m/%d %H:%M:%S.%f')
+		time_stamp = datetime.datetime.strptime(sheet["Time"][i], '%Y/%m/%d %H:%M:%S.%f')
 		if time_stamp < time_start:
 			i = i + 1
 		elif time_start <= time_stamp < time_end:
-			if sheet["P" + str(i)].value != 0:
-				if sheet["G" + str(i)].value == 0 and buy_min <= sheet["Q" + str(i)].value * 100 < buy_max:
-					if int(sheet["Q" + str(i)].value * 100 - buy_min) in buy_dict:
-						buy_dict[int(sheet["Q" + str(i)].value * 100 - buy_min)] += sheet["P" + str(i)].value
+			if sheet["SIZE"][i] != 0:
+				if sheet["BUY_SELL_FLAG"][i] == 0 and buy_min <= sheet["PRICE"][i] * 100 < buy_max:
+					if int(sheet["PRICE"][i] * 100 - buy_min) in buy_dict:
+						buy_dict[int(sheet["PRICE"][i] * 100 - buy_min)] += sheet["SIZE"][i]
 					else:
-						buy_dict[int(sheet["Q" + str(i)].value * 100 - buy_min)] = sheet["P" + str(i)].value
-				elif sheet["G" + str(i)].value == 1 and sell_min <= sheet["Q" + str(i)].value * 100 < sell_max:
-					if int(sheet["Q" + str(i)].value * 100 - sell_min) in sell_dict:
-						sell_dict[int(sheet["Q" + str(i)].value * 100 - sell_min)] += sheet["P" + str(i)].value
+						buy_dict[int(sheet["PRICE"][i] * 100 - buy_min)] = sheet["SIZE"][i]
+				elif sheet["BUY_SELL_FLAG"][i] == 1 and sell_min <= sheet["PRICE"][i] * 100 < sell_max:
+					if int(sheet["PRICE"][i] * 100 - sell_min) in sell_dict:
+						sell_dict[int(sheet["PRICE"][i] * 100 - sell_min)] += sheet["SIZE"][i]
 					else:
-						sell_dict[int(sheet["Q" + str(i)].value * 100 - sell_min)] = sheet["P" + str(i)].value
+						sell_dict[int(sheet["PRICE"][i] * 100 - sell_min)] = sheet["SIZE"][i]
 			i = i + 1
 		else:
 			if len(buy_dict) > 0 or len(sell_dict) > 0:
