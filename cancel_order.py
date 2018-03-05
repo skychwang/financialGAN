@@ -4,8 +4,7 @@ import os
 
 def detect_cancel(value):
     """
-    This function deal with each order, only the last submission
-    is valid, all the submission before it is cancelled.
+    Find orders that are cancelled or trasacted
     """
     length = value.shape[0] #the length of the group
     if(value.iloc[length-1]['SIZE'] > 0):
@@ -15,21 +14,39 @@ def detect_cancel(value):
     cancel_df = value_new.loc[value_new.loc[:,'SIZE']>0,:]
     return cancel_df
 
+def merge_cancel(value):
+    """
+    For given Timestamp and price, merge the sizes of all the orders
+    """
+    cancel_merge_df = pd.DataFrame(columns=value.columns)
+    cancel_merge_df = cancel_merge_df.append(value.iloc[0])
+    cancel_merge_df.iloc[0]['SIZE'] = value['SIZE'].sum()
+    return cancel_merge_df
+
 def get_cancel_order(order_filename):
     """
-    This function generates execl file for canelletion orders with raw orders
-    Input:
-    dir : tdir of the raw order
-    file_name : file_name of the raw order
+    get cancelled orders from 'order_filename', save these orders in tgt_path
     """
-
     src_path = os.path.join('RMD/'+order_filename)
     tgt_path = os.path.join('RMD/'+order_filename.replace('Raw','Cancel'))
-    example = pd.read_excel(src_path).drop(columns=['Index'])
-    example_cancellation = example.groupby(['ORDER_ID'],as_index=False)
-    cancellation_trade = example_cancellation.apply(detect_cancel) \
+    trd_path = os.path.join('RMD/'+ order_filename.replace('Order_Raw','TRD'))
+
+
+    example = pd.read_excel(src_path)
+    trade = pd.read_excel(trd_path).reindex(columns=['Time','SIZE','PRICE']).set_index(keys=['Time','PRICE'])
+
+    exm_cancel = example.groupby(['ORDER_ID'],as_index=False)
+    cancel_trd = exm_cancel.apply(detect_cancel) \
                 .reset_index().drop(columns=['level_0','level_1'])
-    cancellation_trade.to_excel(tgt_path,index=False)
+    cancel_mrg = cancel_trd.groupby(['Time','PRICE'],as_index=False).apply(merge_cancel) \
+                .reset_index().drop(columns=['level_0','level_1'])
+
+    cancel_ord = cancel_mrg.join(trade,on=['Time','PRICE'],rsuffix='_trd')\
+                .fillna(value={'SIZE_trd':0})
+    cancel_ord['SIZE'] = cancel_ord['SIZE'] - cancel_ord['SIZE_trd']
+    cancel_ord.drop(columns='SIZE_trd',inplace=True)
+    cancel_ord = cancel_ord.loc[cancel_ord['SIZE']>0,:]
+    cancel_ord.to_excel(tgt_path)
 
 
 if __name__ == '__main__':
