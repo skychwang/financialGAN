@@ -4,14 +4,15 @@ import os
 
 def detect_cancel(value):
     """
-    Find orders that are cancelled or trasacted
+    Find orders that are cancelled or transacted
     """
     length = value.shape[0] #the length of the group
-    if(value.iloc[length-1]['SIZE'] > 0):
-        value_new = value.iloc[0:length-1] # get rid of the last row if it is valid
-    else:
-        value_new = value
-    cancel_df = value_new.loc[value_new.loc[:,'SIZE']>0,:]
+    cancel_df = pd.DataFrame(columns=value.columns)
+    for i in range(1,length):
+        if(value.iloc[i]['SIZE']<value.iloc[i-1]['SIZE']):
+            tmp_order = value.iloc[i]
+            tmp_order['SIZE'] = value.iloc[i-1]['SIZE'] - value.iloc[i]['SIZE']
+            cancel_df = cancel_df.append(tmp_order)
     return cancel_df
 
 def merge_cancel(value):
@@ -46,7 +47,7 @@ def get_cancel_order(order_filename):
     cancel_ord['SIZE'] = cancel_ord['SIZE'] - cancel_ord['SIZE_trd']
     cancel_ord.drop(columns='SIZE_trd',inplace=True)
     cancel_ord = cancel_ord.loc[cancel_ord['SIZE']>0,:]
-    cancel_ord.to_excel(tgt_path)
+    cancel_ord.to_excel(tgt_path,index=False)
 
 
 if __name__ == '__main__':
