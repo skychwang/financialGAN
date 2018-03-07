@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 
-def read_data_one_day(file_name,start_id,stream_size,batch_size):
+def read_data(file_name,start_id,stream_size,batch_size):
     '''
     Input:
     file_name : filename of json_file
