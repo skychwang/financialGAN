@@ -1,3 +1,5 @@
+# Real data tests
+
 import tensorflow as tf
 import numpy as np
 from keras import backend as K
@@ -6,11 +8,13 @@ from keras import regularizers
 from keras.layers import (Conv2D, MaxPooling2D, Conv2DTranspose, Dropout, Input, Activation, Flatten, Dense, Reshape, UpSampling2D, BatchNormalization)
 from keras.optimizers import RMSprop, Adam
 from randomOrderGenerator import (randomOrderGenerator, randomLabelGenerator)
+from read_json import *
+from order_vector import *
 
 import pdb
 
 class GAN(object):
-	def __init__(self, orderStreamSize=100, orderLength=50):
+	def __init__(self, orderStreamSize=10, orderLength=600):
 		# Orderstream dimensions init
 		self.orderStreamSize = orderStreamSize
 		self.orderLength = orderLength
@@ -30,7 +34,7 @@ class GAN(object):
 
 		# model definition
 		self.D = Sequential()
-		self.D.add(Conv2D(32, (3, 3), activation='relu', input_shape=(self.orderStreamSize, self.orderLength, 1)))
+		self.D.add(Conv2D(64, (3, 3), activation='relu', input_shape=(self.orderStreamSize, self.orderLength, 1)))
 		self.D.add(MaxPooling2D(pool_size=(2, 2)))
 		self.D.add(Dropout(dropout))
 
@@ -62,12 +66,12 @@ class GAN(object):
 		# generator vars init
 		dropout = 0.4
 
-		# generator definition, v3, optimized for OS size (100, 50)
+		# generator definition, v4, variable orderstream size, tested with (10, 600)
 		self.G = Sequential()
-		self.G.add(Dense(10*5*400, input_dim=100))
+		self.G.add(Dense(self.orderStreamSize*self.orderLength, input_dim=100))#self.G.add(Dense(10*5*400, input_dim=100))
 		self.G.add(BatchNormalization())
 		self.G.add(Activation('relu'))
-		self.G.add(Reshape((10, 5, 400)))
+		self.G.add(Reshape((int(self.orderStreamSize/10), int(self.orderLength/10), 100)))
 		self.G.add(Dropout(dropout))
 
 		self.G.add(UpSampling2D(size=5))
@@ -106,8 +110,8 @@ class GAN(object):
 class financial_GAN(object):
 	def __init__(self):
 		# generated orderstream dimensions
-		self.orderStreamSize = 100
-		self.orderLength = 50
+		self.orderStreamSize = 10
+		self.orderLength = 600
 
 		# init
 		self.GAN = GAN(orderStreamSize=self.orderStreamSize, orderLength=self.orderLength)
@@ -115,17 +119,19 @@ class financial_GAN(object):
 		self.generator = self.GAN.generator()
 		self.adversarial = self.GAN.adversarial_model()
 
-	def normalize(self, array, maxV=100, minV=0, high=1, low=-1):
+	def normalize(self, array, maxV=np.amax(np.load("data.npy", mmap_mode='r')), minV=0, high=1, low=-1):
 		return (high - (((high - low) * (maxV - array)) / (maxV - minV)))
 
-	def denormalize(self, normArray, maxV=100, minV=0, high=1, low=-1):
+	def denormalize(self, normArray, maxV=np.amax(np.load("data.npy", mmap_mode='r')), minV=0, high=1, low=-1):
 		return ((((normArray - high) * (maxV - minV))/(high - low)) + maxV)
 
 
-	def train(self, train_steps=10000, batch_size=64, pretrain_size=10000):
+	def train(self, train_steps=10000, batch_size=64, pretrain_size=5000):
 		# Pretrain 10 epochs
 		"""
-		x = self.normalize(next(randomOrderGenerator(pretrain_size, self.orderStreamSize, self.orderLength)))
+		xstartingidx = np.random.randint(0, np.load("data.npy", mmap_mode='r').shape[0] - pretrain_size)
+		idx = np.linspace(xstartingidx, xstartingidx+pretrain_size, pretrain_size, endpoint=False, dtype=int) 
+		x = self.normalize(np.load("data.npy", mmap_mode='r')[idx])#self.normalize(next(randomOrderGenerator(pretrain_size, self.orderStreamSize, self.orderLength)))
 		y = np.ones([pretrain_size, 1])
 		print("\nPretrain of discriminator:\n")
 		self.discriminator.fit(x, y, epochs=10)
@@ -133,17 +139,15 @@ class financial_GAN(object):
 
 		# USES TRAIN_ON_BATCH
 		# Real and Generated train
-
-		data = self.normalize(next(randomOrderGenerator(100000, self.orderStreamSize, self.orderLength)))
 		
 		for i in range(train_steps):
 			## gen noise init
 			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
 			## train/fake init
 			### consecutive random indexes
-			x = np.random.randint(0, data.shape[0] - batch_size)
+			x = np.random.randint(0, np.load("data.npy", mmap_mode='r').shape[0] - batch_size)
 			idx = np.linspace(x, x+batch_size, batch_size, endpoint=False, dtype=int) 
-			orderStreams_train = data[idx]
+			orderStreams_train = self.normalize(np.load("data.npy", mmap_mode='r')[idx])
 			orderStreams_fake = self.normalize(self.denormalize(self.generator.predict(noise)).astype(int)) # effectively concats generated to integers.
 			## data/labels init
 			x = np.concatenate((orderStreams_train, orderStreams_fake))
@@ -162,7 +166,7 @@ class financial_GAN(object):
 			log_mesg = "%s  [A loss: %f]" % (log_mesg, a_loss)
 			print(log_mesg)
 
-			#print(self.denormalize(x[65]))
+			#print(self.denormalize(x[65][0]))
 
 			if i % 10 == 0:
 				self.discriminator.save_weights('discriminator', True)
