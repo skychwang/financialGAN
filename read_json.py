@@ -40,7 +40,7 @@ def read_multiple_days_data():
     for raw_order in raw_orders[1:]:
         data = np.concatenate((data, read_one_day_data(raw_order)), axis=0)
     print(data.shape)
-    return data;
+    return data
 
 if __name__ == '__main__':
     np.save("data.npy", read_multiple_days_data())
