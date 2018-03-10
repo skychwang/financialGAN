@@ -144,9 +144,7 @@ class financial_GAN(object):
 			## gen noise init
 			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
 			## train/fake init
-			### consecutive random indexes
-			x = np.random.randint(0, np.load("data.npy", mmap_mode='r').shape[0] - batch_size)
-			idx = np.linspace(x, x+batch_size, batch_size, endpoint=False, dtype=int) 
+			idx = np.random.randint(0, np.load("data.npy", mmap_mode='r').shape[0])
 			orderStreams_train = self.normalize(np.load("data.npy", mmap_mode='r')[idx])
 			orderStreams_fake = self.normalize(self.denormalize(self.generator.predict(noise)).astype(int)) # effectively concats generated to integers.
 			## data/labels init
