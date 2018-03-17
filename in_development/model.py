@@ -14,7 +14,7 @@ from order_vector import *
 import pdb
 
 class GAN(object):
-	def __init__(self, orderStreamSize=10, orderLength=600):
+	def __init__(self, orderStreamSize=100, orderLength=600):
 		# Orderstream dimensions init
 		self.orderStreamSize = orderStreamSize
 		self.orderLength = orderLength
@@ -110,7 +110,7 @@ class GAN(object):
 class financial_GAN(object):
 	def __init__(self):
 		# generated orderstream dimensions
-		self.orderStreamSize = 10
+		self.orderStreamSize = 100
 		self.orderLength = 600
 
 		# init
