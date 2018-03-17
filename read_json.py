@@ -3,7 +3,7 @@ import numpy as np
 import os
 import sys
 
-def read_one_day_data(file_name,order_stream=10,batch_size=500):
+def read_one_day_data(file_name,order_stream=100,batch_size=64):
     '''
     Input:
     file_name : filename of json_file
