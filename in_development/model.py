@@ -34,7 +34,7 @@ class GAN(object):
 
 		# model definition
 		self.D = Sequential()
-		self.D.add(Conv2D(64, (3, 3), activation='relu', input_shape=(self.orderStreamSize, self.orderLength, 1)))
+		self.D.add(Conv2D(64, (3, 3), activation='relu', input_shape=(self.orderStreamSize, self.orderLength, 2)))
 		self.D.add(MaxPooling2D(pool_size=(2, 2)))
 		self.D.add(Dropout(dropout))
 
@@ -87,7 +87,7 @@ class GAN(object):
 		self.G.add(Activation('relu'))
 
 		# generator output - orderstream, size (orderStreamSize, orderLength, 1)
-		self.G.add(Conv2DTranspose(1, 5, padding='same'))
+		self.G.add(Conv2DTranspose(2, 5, padding='same'))
 		self.G.add(Activation('tanh'))
 
 		self.G.summary()
