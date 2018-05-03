@@ -4,7 +4,7 @@ import os
 import sys
 import scipy.ndimage as ndimage
 
-def read_one_day_data(file_name,order_stream=10,batch_size=256):
+def read_one_day_data(file_name, history = 100, order_stream=10,batch_size=64):
     '''
     Input:
     file_name : filename of json_file
@@ -21,13 +21,14 @@ def read_one_day_data(file_name,order_stream=10,batch_size=256):
 
     max_t = int(np.max(time_index))
 
-    buy_sell_array = np.zeros((max_t+1,600,2))
+    buy_sell_array = np.zeros(((max_t+1),600,2))
+    order_stream = order_stream + history
 
     for i in range(len(time_index)):
         for price,size in buy_vector[i].items():
-            buy_sell_array[time_index[i],int(price)-1,0] = size
+            buy_sell_array[int(time_index[i]),int(int(price))-1,0] += size
         for price,size in sell_vector[i].items():
-            buy_sell_array[time_index[i],int(price)-1,1] = size
+            buy_sell_array[int(time_index[i]),int(int(price))-1,1] += size
 
     num_batches = int(np.floor(buy_sell_array.shape[0]/(order_stream*batch_size)))
 
@@ -41,7 +42,8 @@ def read_multiple_days_data():
     for raw_order in raw_orders[1:]:
         data = np.concatenate((data, read_one_day_data(raw_order)), axis=0)
     print(data.shape)
+    data[data>800]=0
     return data
 
 if __name__ == '__main__':
-    np.save("data.npy", read_multiple_days_data())
+    np.save("data_2.npy", read_multiple_days_data())
