@@ -67,7 +67,7 @@ def get_size_distribution_per_price_level(orderstreams, is_buy=True, mode="avera
 
             y += input_vector[i].tolist()
 
-        plt.scatter(x, y, marker=".", s=0.1)
+        plt.scatter(x, y, marker=".", s=1)
 
         if (is_buy):
             plt.xlabel("price(buy vector)")
@@ -90,7 +90,7 @@ def get_size_distribution_per_price_level(orderstreams, is_buy=True, mode="avera
     fig = plt.figure()
 
 
-    plt.scatter(x, y, marker=".", s=0.1)
+    plt.scatter(x, y, marker=".", s=1)
     if (is_buy):
         plt.xlabel("price(buy vector)")
     else:
@@ -122,17 +122,37 @@ def get_nonzero_element_distribution(orderstreams, is_buy=True, mode="nonzero"):
 
     if (mode!="nonzero"):
         hist, bin_edges = np.histogram(input_vector, bins=int(np.amax(input_vector)))
+        # print(hist)
+        # print(bin_edges)
+        num = len(input_vector)
+        print("#######################################")
+        print("the distribution of nonzero element are")
+        for i in range(len(hist)):
+            if (hist[i] != 0):
+                print("size " + str(bin_edges[i]) + " show " + str(hist[i]) + " times" + \
+                      ", which is " + str(hist[i] / num * 100) + "% of all")
     else:
         hist, bin_edges = np.histogram(input_vector, bins=np.arange(1,np.amax(input_vector),1))
+        fig = plt.figure()
+        plt.hist(input_vector, bins=np.arange(1,2000,1))
+        plt.xlabel("size")
+        plt.ylabel("frequency")
+        plt.title("the hist of size freqency")
+        if (is_buy):
+            fig.savefig('(buy)the_hist_of_size_freqency.png', dpi=400)
+        else:
+            fig.savefig('(sell)the_hist_of_size_freqency.png.png', dpi=400)
+        # print(hist)
+        # print(bin_edges)
+        num_nonzero = np.count_nonzero(input_vector)
+        print("#######################################")
+        print("the distribution of nonzero element are")
+        for i in range(len(hist)):
+            if (hist[i] != 0):
+                print("size " + str(bin_edges[i]) + " show " + str(hist[i]) + " times" + \
+                      ", which is " + str(hist[i] / num_nonzero * 100) + "% of all")
 
-    #print(hist)
-    #print(bin_edges)
-    print("#######################################")
-    print("the distribution of nonzero element are")
-    for i in range(len(hist)):
-        if (hist[i] != 0):
-            print("size " + str(bin_edges[i]) + " show " + str(hist[i]) + " times" + \
-                  ", which is " + str(hist[i] / len(input_vector)) + "% of all")
+
 
 
 def get_nonzero_vector_distribution(orderstreams, is_buy=True, mode="hist",
@@ -175,8 +195,10 @@ def get_nonzero_vector_distribution(orderstreams, is_buy=True, mode="hist",
         print("#############################################################")
         print("the distribution of nonzero element in each time interval are")
         for i in range(len(hist)):
-            print(str(hist[i]) + " vectors has " + str(bin_edges[i]) + " nonzero element"+ \
-                  ", which is "+str(hist[i]/num_vectors)+"%")
+            if (hist[i] != 0):
+                print(str(hist[i]) + " vectors has " + str(bin_edges[i]) + " nonzero element" + \
+                      ", which is " + str(hist[i] / num_vectors*100) + "%")
+
 
     elif (mode=="hist_nonzero"):
         # get rid of all zeros
@@ -192,8 +214,10 @@ def get_nonzero_vector_distribution(orderstreams, is_buy=True, mode="hist",
         print("#############################################################")
         print("the distribution of nonzero element in each time interval are")
         for i in range(len(hist)):
-            print(str(hist[i])+" vectors has "+str(bin_edges[i])+" nonzero element"+ \
-                  ", which is "+str(hist[i]/num_vectors)+"%")
+            if (hist[i]!=0):
+                print(str(hist[i]) + " vectors has " + str(bin_edges[i]) + " nonzero element" + \
+                      ", which is " + str(hist[i] / num_vectors*100) + "%")
+
     elif (mode == "scatter"):
         plt.plot(x, y, ".")
         plt.xlabel("order vectors(time intervel of 100ns)")
@@ -294,8 +318,8 @@ def get_time_interval_distribution(orderstreams, is_buy=True, mode="hist",
 
         for i in range(len(hist)):
             if (hist[i] != 0):
-                print(str(hist[i]) + " nonzero vectors has " + str(bin_edges[i]) + " of all zero vectors before it" + \
-                      ", which is " + str(hist[i] / len(list)) + "%")
+                print(str(hist[i]) + " nonzero vectors has " + str(bin_edges[i]) + " all zero vectors before it" + \
+                      ", which is " + str(hist[i] / len(list)*100) + "%")
     else:
         #print(x.shape)
         #print(y[np.nonzero(y)].shape)
@@ -350,7 +374,7 @@ def get_distribution(orderstreams):
 
 
 if __name__ == '__main__':
-    orderstreams = np.load("data_google.npy", mmap_mode='r')
+    orderstreams = np.load("data.npy", mmap_mode='r')
     get_distribution(orderstreams)
 
     #get_average_size_distribution_per_price_level(orderstreams, mode="max")
