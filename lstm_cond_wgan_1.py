@@ -21,11 +21,11 @@ class RandomWeightedAverage(_Merge):
     Improvements appreciated."""
 
     def _merge_function(self, inputs):
-        weights = K.random_uniform((128, 1, 1,1))
+        weights = K.random_uniform((10, 1, 1,1))
         return (weights * inputs[0]) + ((1 - weights) * inputs[1])
 
 class lstm_cond_gan(object):
-    def __init__(self, retrain=True, orderLength=600,historyLength=80,noiseLength=100,hist_noise_ratio=1,mini_batch_size=30):
+    def __init__(self, retrain=True, orderLength=60,historyLength=10,noiseLength=100,hist_noise_ratio=1,mini_batch_size=10):
         self.orderLength = orderLength
         self.historyLength = historyLength
         self.noiseLength = noiseLength
@@ -136,17 +136,17 @@ class lstm_cond_gan(object):
 
         #discriminator
         D = Sequential(name='discriminator')
-        D.add(Conv2D(16, (3,3),  input_shape=(self.mini_batch_size+self.historyLength, self.orderLength,1)))
+        D.add(Conv2D(1024, (3,3),  input_shape=(self.mini_batch_size+self.historyLength, self.orderLength,1)))
         #D.add(BatchNormalization())
         D.add(Activation('relu'))
         #D.add(Conv2D(8, (3,3)))
         #D.add(BatchNormalization())
         #D.add(Activation('relu'))
-        D.add(Conv2D(2,(3,3)))
-        D.add(BatchNormalization())
+        D.add(Conv2D(256,(3,3)))
+        #D.add(BatchNormalization())
         D.add(Activation('relu'))
         D.add(Flatten())
-        D.add(MinibatchDiscrimination(200,5))
+        #D.add(MinibatchDiscrimination(200,5))
         D.add(Dense(1))
         #D.add(Activation('sigmoid'))
         self.D = D
@@ -156,7 +156,7 @@ class lstm_cond_gan(object):
 
         partial_gp_loss = partial(self.gradient_penalty_loss,
                                   averaged_samples=averaged_samples,
-                                  gradient_penalty_weight=1)
+                                  gradient_penalty_weight=10)
         partial_gp_loss.__name__ = 'gradient_penalty'  # Functions need names or Keras will throw an error
 
         self.gen = Model(inputs=[history_input, noise_input], outputs= generator_output)
@@ -176,18 +176,18 @@ class lstm_cond_gan(object):
         self.model_fake.summary()
         self.model_truth.summary()
 
-    def normalize(self, array, maxV=800, minV=0, high=1, low=-1):
-        #a =1.0001
-        return (high - (((high - low) * (maxV - array)) / (maxV - minV)))
-        #return   a-(a+1)*np.exp(-(array/maxV)**0.5*np.log((a+1)/(a-1)))
+    def normalize(self, array, maxV=np.amax(np.load("data_2.npy", mmap_mode='r')), minV=0, high=1, low=-1):
+        a =1.0001
+        #return (high - (((high - low) * (maxV - array)) / (maxV - minV)))
+        return   a-(a+1)*np.exp(-(array/maxV)**0.5*np.log((a+1)/(a-1)))
 
-    def denormalize(self, normArray, maxV=800, minV=0, high=1, low=-1):
-        #a= 1.0001
-        #return (np.log((a-normArray)/(a+1))/np.log((a+1)/(a-1)))**2*maxV
-        return ((((normArray - high) * (maxV - minV))/(high - low)) + maxV)
+    def denormalize(self, normArray, maxV=np.amax(np.load("data_2.npy", mmap_mode='r')), minV=0, high=1, low=-1):
+        a= 1.0001
+        return (np.log((a-normArray)/(a+1))/np.log((a+1)/(a-1)))**2*maxV
+        #return ((((normArray - high) * (maxV - minV))/(high - low)) + maxV)
 
 
-    def fit(self, train_steps=1201,batch_size=128):
+    def fit(self, train_steps=3000, batch_size=10):
         data = np.load("data_2.npy", mmap_mode='r')
         for i in range(train_steps):
             ## gen noise init
