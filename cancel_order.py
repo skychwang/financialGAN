@@ -49,6 +49,10 @@ def get_cancel_order(order_filename):
     cancel_ord = cancel_ord.loc[cancel_ord['SIZE']>0,:]
     cancel_ord.to_excel(tgt_path,index=False)
 
+def order_cancel_multiple_days():
+	raw_orders = [file for file in os.listdir("RMD/") if file.startswith("PN_Order")]
+	for raw_order in raw_orders:
+		get_cancel_order(raw_order)
 
 if __name__ == '__main__':
-    get_cancel_order('PN_Order_Raw_080116.xlsx')
+    order_cancel_multiple_days()
