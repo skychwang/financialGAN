@@ -19,7 +19,7 @@ class RandomWeightedAverage(_Merge):
 
 
 class lstm_cond_gan(object):
-    def __init__(self, orderLength=120, historyLength=100,noiseLength=50,hist_noise_ratio=1,mini_batch_size=10,data_path='data.npy',batch_size=32):
+    def __init__(self, orderLength=240, historyLength=100, noiseLength=50, hist_noise_ratio=1, mini_batch_size=10, data_path=None , batch_size=32):
         self.orderLength = orderLength
         self.historyLength = historyLength
         self.noiseLength = noiseLength
@@ -66,6 +66,7 @@ class lstm_cond_gan(object):
         history_input = Input(shape=(self.historyLength, self.orderLength), name='history_input')
         attention_mul = self.attention_3d_block(history_input)
         lstm_output = LSTM(self.lstm_out_length)(attention_mul)
+
 
         # merge with noise
         noise_input = Input(shape=(self.noiseLength,), name='noise_input')
@@ -151,7 +152,7 @@ class lstm_cond_gan(object):
         #return ((((normArray - high) * (maxV - minV))/(high - low)) + maxV)
 
 
-    def fit(self, train_steps=3000):
+    def fit(self, train_steps=100):
         data = np.load(self.data_path, mmap_mode='r')
         for i in range(train_steps):
             ## gen noise init
@@ -191,7 +192,7 @@ class lstm_cond_gan(object):
 
 
 class lstm_cond_gan_01(object):
-    def __init__(self, orderLength=1, historyLength=100,noiseLength=50,hist_noise_ratio=1,mini_batch_size=10,data_path='data.npy',batch_size=32):
+    def __init__(self, orderLength=2, historyLength=300,noiseLength=100,hist_noise_ratio=1,mini_batch_size=20,data_path=None,batch_size=32):
         self.orderLength = orderLength
         self.historyLength = historyLength
         self.noiseLength = noiseLength
@@ -224,10 +225,10 @@ class lstm_cond_gan_01(object):
         a = Permute((2, 1))(inputs)
         a = Dense(self.historyLength, activation='softmax')(a)
         if SINGLE_ATTENTION_VECTOR:
-            a = Lambda(lambda x: K.mean(x, axis=1), name='dim_reduction_1')(a)
+            a = Lambda(lambda x: K.mean(x, axis=1))(a)
             a = RepeatVector(self.orderLength)(a)
-        a_probs = Permute((2, 1), name='attention_vec_1')(a)
-        output_attention_mul = merge([inputs, a_probs], name='attention_mul_2', mode='mul')
+        a_probs = Permute((2, 1))(a)
+        output_attention_mul = merge([inputs, a_probs], mode='mul')
         return output_attention_mul
 
     def build(self):
@@ -238,7 +239,9 @@ class lstm_cond_gan_01(object):
         history_input = Input(shape=(self.historyLength, self.orderLength), name='history_input')
         attention_mul = self.attention_3d_block(history_input)
         lstm_output = LSTM(self.lstm_out_length)(attention_mul)
-
+        #D lstm with attention mechamism
+        attention_mul_d = self.attention_3d_block(history_input)
+        lstm_output_d = LSTM(self.orderLength*30)(attention_mul_d)
         # merge with noise
         noise_input = Input(shape=(self.noiseLength,), name='noise_input')
         gen_input = Concatenate(axis=-1)([lstm_output, noise_input])
@@ -268,26 +271,26 @@ class lstm_cond_gan_01(object):
         self.G = G
         generator_output = G(gen_input)
 
-        discriminator_input_fake = (Concatenate(axis=1)([Reshape((self.historyLength, self.orderLength,1))(history_input), generator_output]))
+        discriminator_input_fake = (Concatenate(axis=1)([Reshape((30, self.orderLength,1))(lstm_output_d), generator_output]))
         truth_input = Input(shape=(self.mini_batch_size,self.orderLength,1),name='truth_input')
-        discriminator_input_truth = Concatenate(axis=1)([Reshape((self.historyLength, self.orderLength,1))(history_input), truth_input])
+        discriminator_input_truth = Concatenate(axis=1)([Reshape((30, self.orderLength,1))(lstm_output_d), truth_input])
 
         #gradient penelty
         averaged_samples = RandomWeightedAverage()([discriminator_input_fake, discriminator_input_truth])
 
         #discriminator
         D = Sequential(name='discriminator')
-        D.add(Conv2D(1024,(3,3), padding='same', input_shape=(self.mini_batch_size+self.historyLength, self.orderLength,1)))
+        D.add(Conv2D(1024,(3,3), padding='same', input_shape=(self.mini_batch_size+30, self.orderLength,1)))
         #D.add(BatchNormalization())
         D.add(Activation('relu'))
-        D.add(Conv2D(128, (3,3),padding='same'))
+        #D.add(Conv2D(512, (3,3),padding='same'))
         #D.add(BatchNormalization())
-        D.add(Activation('relu'))
-        D.add(Conv2D(32,(3,3),padding='same'))
+        #D.add(Activation('relu'))
+        D.add(Conv2D(128,(3,3),padding='same'))
         #D.add(BatchNormalization())
         D.add(Activation('relu'))
         D.add(Flatten())
-        #D.add(MinibatchDiscrimination(200,5))
+        D.add(MinibatchDiscrimination(200,5))
         D.add(Dense(1))
         #D.add(Activation('sigmoid'))
         self.D = D
@@ -351,18 +354,27 @@ class lstm_cond_gan_01(object):
             if i % 100 == 0:
                generator =self.denormalize(self.gen.predict([orderStreams_train_history, noise]))
                print(np.sum(generator>0.5))
+               self.gen.save('gnr')
                np.save('gen_'+str(i)+'.npy',generator)
 
-    def predict(self,save_path='predict.npy',length=100000):
+    def predict(self,save_path='predict.npy',length=12500,step_size=20,num_runs=1):
         data = np.load(self.data_path, mmap_mode='r')
-        idx = np.random.randint(0, data.shape[0])
-        initial_predict = self.normalize(data[idx,1,:self.historyLength,:,0])
-        generated_orders = self.denormalize(initial_predict)
-        for i in range(length):
-            noise = np.random.uniform(-1,1,size=[1, self.noiseLength])
-            orderStreams = (self.gen.predict([initial_predict.reshape((1,self.historyLength,self.orderLength)), noise]))
-            generated_orders = np.concatenate((generated_orders,self.denormalize(orderStreams).reshape(self.mini_batch_size,self.orderLength)))
-            initial_predict = np.concatenate((initial_predict[self.mini_batch_size:,],orderStreams.reshape(self.mini_batch_size,self.orderLength)))
+        gen = load_model('gnr')
+        generated_orders = np.zeros((num_runs, length*step_size+self.historyLength,self.orderLength))
+        for j in range(num_runs):
+            idx = np.random.randint(0, data.shape[0])
+            history = self.normalize(data[idx,1,:self.historyLength,:,0])
+            generated_orders[j,:self.historyLength,:] = self.denormalize(history)
+            for i in range(length):
+                noise = np.random.uniform(-1,1,size=[1, self.noiseLength])
+                #time_start = time.time()
+                orderStreams = (gen.predict([history.reshape((1,self.historyLength,self.orderLength)), noise]))
+                generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,:] = self.denormalize(orderStreams[:,:step_size,:,:]).reshape(step_size, self.orderLength)
+                #print(time.time()-time_start)
+                history = generated_orders[j,(i+1)*step_size:self.historyLength+(i+1)*step_size,:]
+                if(i % 100 == 0 ):
+                    #print(np.sum(orderStreams>0.5))
+                    print(str(j)+' runs ' + str(i)+' steps')
         np.save(save_path,generated_orders)
 
 
