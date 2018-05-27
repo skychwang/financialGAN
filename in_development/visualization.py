@@ -19,11 +19,12 @@ def get_size_distribution_per_price_level(orderstreams, is_buy=True, mode="avera
         price_range = sell_max - sell_min
 
     # convert the orderstream to a array of mutiple orders
-    orderstreams = np.reshape(orderstreams, (num_batches*batch_size*order_stream_size, price_range, 2))
+    orderstreams = np.reshape(orderstreams, (num_batches * batch_size * order_stream_size, price_range, 2))
 
     buy_vector = orderstreams[:, :, 0]
     sell_vector = orderstreams[:, :, 1]
     #print(buy_vector.shape)
+    #print(sell_vector.shape)
 
     # get x-axis
     if (is_buy):
@@ -120,6 +121,9 @@ def get_nonzero_element_distribution(orderstreams, is_buy=True, mode="nonzero"):
     else:
         input_vector = sell_vector
 
+    a = 1.01
+    #input_vector = a - (a + 1) * np.exp(-(input_vector) ** 0.5 * np.log((a + 1) / (a - 1)))
+
     if (mode!="nonzero"):
         hist, bin_edges = np.histogram(input_vector, bins=int(np.amax(input_vector)))
         # print(hist)
@@ -154,7 +158,6 @@ def get_nonzero_element_distribution(orderstreams, is_buy=True, mode="nonzero"):
 
 
 
-
 def get_nonzero_vector_distribution(orderstreams, is_buy=True, mode="hist",
                                     sell_min=900, sell_max=1500,
                                     buy_min=600, buy_max=1200):
@@ -182,6 +185,7 @@ def get_nonzero_vector_distribution(orderstreams, is_buy=True, mode="hist",
         input_vector = buy_vector
     else:
         input_vector = sell_vector
+
 
     # get the number of nonzero element at each time interval(vector)
     y = np.count_nonzero(input_vector, axis=1)
@@ -369,17 +373,17 @@ def get_distribution(orderstreams):
     get_time_interval_distribution(orderstreams,is_buy=False, mode="hist")
 
 
-#orderstreams should be (num_time_intervals, 2)
-def test_zero_one_distribution(orderstreams, is_buy=True):
+#orderstreams should be (num_time_intervals, 2), return the first 2000
+def test_zero_one_distribution(orderstreams, mode="buy"):
     #print(orderstreams.shape)
     total_time_intervals = orderstreams.shape[0]
-    buy_vector = orderstreams[:, 0]
-    sell_vector = orderstreams[:, 1]
-    #print(buy_vector.shape)
 
-    if (is_buy):
+
+    if (mode == "buy"):
+        buy_vector = orderstreams[:, 0]
         input_vector = buy_vector
-    else:
+    elif (mode == "sell"):
+        sell_vector = orderstreams[:, 1]
         input_vector = sell_vector
 
     print("the percentage of nonzero are")
@@ -405,45 +409,26 @@ def test_zero_one_distribution(orderstreams, is_buy=True):
     plt.ylabel("frequency")
     plt.legend(loc=1)
     plt.title('number of 0 before nonzero vector distribution')
-    if (is_buy):
-        fig.savefig('fake_buy_0-1.png', dpi=200)
-    else:
-        fig.savefig('fake_sell_0-1.png', dpi=200)
+    fig.savefig(mode+'fake_buy_0-1.png', dpi=200)
 
     print("###################################################################")
     print("the distribution of the time interval between nonzero vector are")
 
+    result = []
     for i in range(len(hist)):
+        if (bin_edges[i] < 800):
+            result.append(hist[i])
+
         if (hist[i] != 0):
             print(str(hist[i]) + " nonzero vectors has " + str(bin_edges[i]) + " all zero vectors before it" + \
                   ", which is " + str(hist[i] / len(list) * 100) + "%")
+    return result
 
 
+def test_0_1_real(file_name):
+    orderstreams = np.load(file_name, mmap_mode='r')
+    # get_distribution(orderstreams)
 
-if __name__ == '__main__':
-    orderstreams = np.load("predict_13.npy", mmap_mode='r')
-    #get_distribution(orderstreams)
-
-    print(orderstreams.shape)
-
-    total_time_intervals = orderstreams.shape[0] * orderstreams.shape[1]
-    orderstreams = np.reshape(orderstreams,(total_time_intervals,1))
-    orderstreams = orderstreams[600:]
-
-    print(orderstreams)
-
-    orderstream = np.zeros((total_time_intervals, 1))
-
-    for i in range(orderstreams.shape[0]):
-        if (orderstreams[i]<=0.5):
-            orderstream[i] = 0
-        else:
-            orderstream[i] = 1
-
-    orderstream = orderstream.astype(int)
-    #np.set_printoptions(threshold=np.nan)
-    """
-    np.set_printoptions(threshold=np.nan)
     print(orderstreams.shape)
 
     num_batches = orderstreams.shape[0]
@@ -454,16 +439,75 @@ if __name__ == '__main__':
 
     orderstreams = np.reshape(orderstreams, (total_time_intervals, 2))
 
-    """
-    orderstream_copy = np.reshape(orderstream, (total_time_intervals, 1))
-    orderstream = np.concatenate((orderstream_copy, orderstream_copy), axis=1)
-    print(orderstream.shape)
-    test_zero_one_distribution(orderstream)
+    print("The buy vector is")
+    test_zero_one_distribution(orderstreams, "buy")
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")
+    print("The sell vector is")
+    test_zero_one_distribution(orderstreams, "sell")
 
-    #get_average_size_distribution_per_price_level(orderstreams, mode="max")
-    #get_nonzero_vector_distribution(orderstreams, mode="scatter")
-    #get_time_interval_distribution(orderstreams, mode="hist")
 
+def test_0_1_fake(file_name, part=None):
+    orderstreams = np.load(file_name, mmap_mode='r')
+    # get_distribution(orderstreams)
+
+    orderstreams = np.reshape(orderstreams, (2,300150,2))
+
+
+    print(orderstreams.shape)
+    num_runs = orderstreams.shape[0]
+
+    if (part == None):
+        # get all data
+        steps = orderstreams.shape[1]
+    else:
+        steps = part
+
+    result = []
+
+    for i in range(num_runs):
+        orderstream_run = orderstreams[i,:,:]
+        #print(orderstream_run.shape)
+        orderstream = np.zeros((steps, 2))
+
+        for i in range(steps):
+            if (orderstream_run[i][0] <= 0.5):
+                orderstream[i][0] = 0
+            else:
+                orderstream[i][0] = 1
+            if (orderstream_run[i][1] <= 0.5):
+                orderstream[i][1] = 0
+            else:
+                orderstream[i][1] = 1
+
+        orderstream = orderstream.astype(int)
+        result_for_run = test_zero_one_distribution(orderstream)
+        result.append(result_for_run)
+
+    print(len(result))
+    print(len(result[1]))
+
+    result_np = np.asarray(result)
+
+    print(result_np.shape)
+
+    mean = np.mean(result_np, axis=0)
+
+    std = np.std(result_np, axis=0)
+
+    print("=================================================")
+    print("The average result is")
+
+    for i in range(800):
+        print(str(mean[i]) + " (mean) nonzero vectors has " + str(i) + " all zero vectors before it" + \
+              ", which is " + str(mean[i] / sum(mean) * 100) + "%" + ", the std is " + str(std[i]))
+
+
+if __name__ == '__main__':
+    orderstreams = np.load("NPY/081516_100.npy", mmap_mode='r')
+    #test_0_1_real("NPY/081516_100.npy")
+    test_0_1_fake("predict_11.npy")
 
 
 
