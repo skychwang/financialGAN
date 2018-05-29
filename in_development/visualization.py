@@ -402,7 +402,7 @@ def test_zero_one_distribution(orderstreams, mode="buy"):
     # print(list)
     fig = plt.figure()
 
-    plt.hist(list, bins=np.arange(0, max(list), 1))
+    plt.hist(list, bins=np.arange(0, max(max(list),800), 1))
 
     hist, bin_edges = np.histogram(list, bins=np.arange(0, max(list), 1))
     plt.xlabel("number of 0 before nonzero vector appear")
@@ -452,8 +452,6 @@ def test_0_1_fake(file_name, part=None):
     orderstreams = np.load(file_name, mmap_mode='r')
     # get_distribution(orderstreams)
 
-    orderstreams = np.reshape(orderstreams, (2,300150,2))
-
 
     print(orderstreams.shape)
     num_runs = orderstreams.shape[0]
@@ -464,31 +462,56 @@ def test_0_1_fake(file_name, part=None):
     else:
         steps = part
 
-    result = []
+    result_buy = []
+    result_sell = []
 
     for i in range(num_runs):
         orderstream_run = orderstreams[i,:,:]
         #print(orderstream_run.shape)
         orderstream = np.zeros((steps, 2))
+        print("the run " + str(i))
 
         for i in range(steps):
             if (orderstream_run[i][0] <= 0.5):
                 orderstream[i][0] = 0
             else:
                 orderstream[i][0] = 1
+
             if (orderstream_run[i][1] <= 0.5):
                 orderstream[i][1] = 0
             else:
                 orderstream[i][1] = 1
 
+
         orderstream = orderstream.astype(int)
-        result_for_run = test_zero_one_distribution(orderstream)
-        result.append(result_for_run)
+        result_for_buy = test_zero_one_distribution(orderstream, "buy")
+        result_for_sell = test_zero_one_distribution(orderstream, "sell")
+        result_buy.append(result_for_buy)
+        result_sell.append(result_for_sell)
 
-    print(len(result))
-    print(len(result[1]))
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")
+    print("The buy vector is")
+    result_np = np.asarray(result_buy)
 
-    result_np = np.asarray(result)
+    print(result_np.shape)
+
+    mean = np.mean(result_np, axis=0)
+
+    std = np.std(result_np, axis=0)
+
+    print("=================================================")
+    print("The average result is")
+
+    for i in range(800):
+        print(str(mean[i]) + " (mean) nonzero vectors has " + str(i) + " all zero vectors before it" + \
+              ", which is " + str(mean[i] / sum(mean) * 100) + "%" + ", the std is " + str(std[i]))
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")
+    print("-------------------------------------------------")
+    print("The sell vector is")
+    result_np = np.asarray(result_sell)
 
     print(result_np.shape)
 
@@ -504,10 +527,12 @@ def test_0_1_fake(file_name, part=None):
               ", which is " + str(mean[i] / sum(mean) * 100) + "%" + ", the std is " + str(std[i]))
 
 
+
+
 if __name__ == '__main__':
     orderstreams = np.load("NPY/081516_100.npy", mmap_mode='r')
     #test_0_1_real("NPY/081516_100.npy")
-    test_0_1_fake("predict_11.npy")
+    test_0_1_fake("predict_buy_sell.npy")
 
 
 
