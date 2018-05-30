@@ -21,7 +21,7 @@ def Q_GAN_Train():
 #Train Z_O_GAN
 def Z_O_GAN_Train(data_path=None):
     gan = GAN.lstm_cond_gan_01(data_path=data_path)
-    gan.fit()
+    #gan.fit()
     gan.predict()
 
 
