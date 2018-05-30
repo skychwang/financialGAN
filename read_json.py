@@ -4,7 +4,7 @@ import os
 import sys
 import scipy.ndimage as ndimage
 
-def read_one_day_data(out_path, zero_one=True, history = 300, order_stream=20, step_size=20, batch_size=32):
+def read_one_day_data(out_path, zero_one=True, history = 100, order_stream=50,step_size=50, batch_size=32):
     '''
     Input:
     out_path: path of excel file
