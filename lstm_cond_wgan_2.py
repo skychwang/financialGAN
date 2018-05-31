@@ -290,7 +290,7 @@ class lstm_cond_gan_01(object):
         #D.add(BatchNormalization())
         D.add(Activation('relu'))
         D.add(Flatten())
-        D.add(MinibatchDiscrimination(200,5))
+        D.add(MinibatchDiscrimination(20,5))
         D.add(Dense(1))
         #D.add(Activation('sigmoid'))
         self.D = D
@@ -357,7 +357,7 @@ class lstm_cond_gan_01(object):
                self.gen.save('gnr')
                #np.save('gen_'+str(i)+'.npy',generator)
 
-    def predict(self,save_path='predict.npy',length=5000,step_size=50,num_runs=1):
+    def predict(self,save_path='predict.npy',length=5000,step_size=50,num_runs=100):
         data = np.load(self.data_path, mmap_mode='r')
         gen = load_model('gnr')
         #np.save('weights.npy',gen.get_layer('dense_1').get_weights()[0])
