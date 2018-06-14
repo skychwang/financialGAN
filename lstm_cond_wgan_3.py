@@ -287,12 +287,12 @@ class lstm_cond_gan_01(object):
         D.add(Activation('relu'))
         D.add(Conv2D(512, (3,3),padding='same'))
         #D.add(BatchNormalization())
-        #D.add(Activation('relu'))
+        D.add(Activation('relu'))
         D.add(Conv2D(128,(3,3),padding='same'))
         #D.add(BatchNormalization())
         D.add(Activation('relu'))
         D.add(Flatten())
-        D.add(MinibatchDiscrimination(20,5))
+        D.add(MinibatchDiscrimination(200,5))
         D.add(Dense(1))
         #D.add(Activation('sigmoid'))
         self.D = D
@@ -333,33 +333,35 @@ class lstm_cond_gan_01(object):
         return ((((normArray - high) * (maxV - minV))/(high - low)) + maxV)
 
 
-    def fit(self, train_steps=30000, buy_sell_tag=0, batch_size=32, gnr_path='gnr'):
+    def fit(self, train_steps=50001, buy_sell_tag=0, batch_size=32, gnr_path='gnr'):
         data = np.load(self.data_path, mmap_mode='r')
         data_cancel = np.load(self.data_cancel_path, mmap_mode='r')
         for i in range(train_steps):
             ## gen noise init
-            noise = np.random.uniform(-1,1 , size=[batch_size, self.noiseLength])
-            ## train/fake init
-            idx = np.random.randint(0, data_cancel.shape[0])
-            orderStreams_train = np.concatenate((self.normalize(data[idx]),self.normalize(data_cancel[idx])),axis=-2)
-            orderStreams_train_history = orderStreams_train[:,:self.historyLength,:,0]
-            orderStreams_train_truth = orderStreams_train[:,self.historyLength:,buy_sell_tag:buy_sell_tag+1,0:1]
             positive_y = np.ones((batch_size, 1), dtype=np.float32)
             negative_y = -positive_y
             dummy_y = np.zeros((batch_size, 1), dtype=np.float32)
-            d_loss = self.model_truth.train_on_batch([orderStreams_train_history,noise,orderStreams_train_truth], [negative_y,positive_y,dummy_y])
+
+            for j in range(5):
+                noise = np.random.uniform(-1,1 , size=[batch_size, self.noiseLength])
+                ## train/fake init
+                idx = np.random.randint(0, data_cancel.shape[0])
+                orderStreams_train = np.concatenate((self.normalize(data[idx]),self.normalize(data_cancel[idx])),axis=-2)
+                orderStreams_train_history = orderStreams_train[:,:self.historyLength,:,0]
+                orderStreams_train_truth = orderStreams_train[:,self.historyLength:,buy_sell_tag:buy_sell_tag+1,0:1]
+                d_loss = self.model_truth.train_on_batch([orderStreams_train_history,noise,orderStreams_train_truth], [negative_y,positive_y,dummy_y])
+
             a_loss = self.model_fake.train_on_batch([orderStreams_train_history,noise], positive_y)
 	        # output
             log_mesg = "%d: [D_fake loss: %f,D_truth loss: %f] " % (i, d_loss[0],d_loss[1])
             log_mesg = "%s  [A loss: %f]" % (log_mesg, a_loss)
             print(log_mesg)
-            if i % 100 == 0:
+            if i % 10000 == 0:
                generator =self.denormalize(self.gen.predict([orderStreams_train_history, noise]))
                print(np.sum(generator>0.5))
                self.gen.save(gnr_path)
-               #np.save('gen_'+str(i)+'.npy',generator)
 
-    def predict(self,save_path='predict.npy',length=5000,step_size=50,num_runs=100):
+    def predict(self,save_path='predict.npy',length=5000,step_size=50,num_runs=1):
         data = np.load(self.data_path, mmap_mode='r')
         data_cancel = np.load(self.data_cancel_path, mmap_mode='r')
         gen_buy = load_model('gnr_buy')
