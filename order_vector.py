@@ -20,11 +20,11 @@ def order_aggregation_one_day(out_dir,order_filename, time_interval=100):
 	time_vector = []
 
 	# TO-DO preprocessing to find min_max range 600 1200 900 1500
-	buy_min = 60
-	buy_max = 120
+	buy_min = 600
+	buy_max = 1200
 	buy_vector = []
-	sell_min = 90
-	sell_max = 150
+	sell_min = 900
+	sell_max = 1500
 	sell_vector = []
 
 	parse_time = order_filename.split("_")[3].split(".")[0]
@@ -51,16 +51,16 @@ def order_aggregation_one_day(out_dir,order_filename, time_interval=100):
 			i = i + 1
 		elif time_start <= time_stamp < time_end:
 			if sheet["SIZE"][i] != 0:
-				if sheet["BUY_SELL_FLAG"][i] == 0 and buy_min <= sheet["PRICE"][i] * 10 < buy_max:
-					if int(sheet["PRICE"][i] * 10 - buy_min) in buy_dict:
-						buy_dict[int(sheet["PRICE"][i] * 10 - buy_min)] += sheet["SIZE"][i]
+				if sheet["BUY_SELL_FLAG"][i] == 0 and buy_min <= sheet["PRICE"][i] * 100 < buy_max:
+					if int(sheet["PRICE"][i] * 100 - buy_min) in buy_dict:
+						buy_dict[int(sheet["PRICE"][i] * 100 - buy_min)] += sheet["SIZE"][i]
 					else:
-						buy_dict[int(sheet["PRICE"][i] * 10 - buy_min)] = sheet["SIZE"][i]
-				elif sheet["BUY_SELL_FLAG"][i] == 1 and sell_min <= sheet["PRICE"][i] * 10 < sell_max:
-					if int(sheet["PRICE"][i] * 10 - sell_min) in sell_dict:
-						sell_dict[int(sheet["PRICE"][i] * 10 - sell_min)] += sheet["SIZE"][i]
+						buy_dict[int(sheet["PRICE"][i] * 100 - buy_min)] = sheet["SIZE"][i]
+				elif sheet["BUY_SELL_FLAG"][i] == 1 and sell_min <= sheet["PRICE"][i] * 100 < sell_max:
+					if int(sheet["PRICE"][i] * 100 - sell_min) in sell_dict:
+						sell_dict[int(sheet["PRICE"][i] * 100 - sell_min)] += sheet["SIZE"][i]
 					else:
-						sell_dict[int(sheet["PRICE"][i] * 10 - sell_min)] = sheet["SIZE"][i]
+						sell_dict[int(sheet["PRICE"][i] * 100 - sell_min)] = sheet["SIZE"][i]
 			i = i + 1
 		else:
 			if len(buy_dict) > 0 or len(sell_dict) > 0:
