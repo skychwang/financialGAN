@@ -4,7 +4,7 @@ import os
 import sys
 import scipy.ndimage as ndimage
 
-def read_one_day_data(out_path, zero_one=True, history = 100, order_stream=50,step_size=50, batch_size=32):
+def read_one_day_data(out_path, zero_one=False, history = 100, order_stream=50,step_size=50, batch_size=32):
     '''
     Input:
     out_path: path of excel file
@@ -20,11 +20,11 @@ def read_one_day_data(out_path, zero_one=True, history = 100, order_stream=50,st
     time_vector = order['time'].values
     buy_vector = order['buy'].values
     sell_vector = order['sell'].values
-    
+
     #convert time to index of numpy array
     time_index = (time_vector - time_vector[0])/100
     time_index = time_index.astype(int)
-    
+
     #zero-one GAN
     if zero_one:
         #time range is defined by max_t
@@ -39,12 +39,12 @@ def read_one_day_data(out_path, zero_one=True, history = 100, order_stream=50,st
 
     else:
         max_t = buy_vector.shape[0]
-        buy_sell_array = np.zeros(((max_t),240,1))
+        buy_sell_array = np.zeros(((max_t),1200,1))
         for i in range(max_t):
             for price,size in buy_vector[i].items():
                 buy_sell_array[i,int(int(price))-1,0] += size
             for price,size in sell_vector[i].items():
-                buy_sell_array[i,int(int(price))-1+60,0] += size
+                buy_sell_array[i,int(int(price))-1+600,0] += size
 
     # Reshape(implement sliding window here)
     # Compute Number of Batches
@@ -53,12 +53,13 @@ def read_one_day_data(out_path, zero_one=True, history = 100, order_stream=50,st
     if zero_one:
         buy_sell_trun = np.zeros((num_batches,batch_size, order_stream + history,2,1))
     else:
-        buy_sell_trun = np.zeros((num_batches,batch_size, order_stream + history,240,1))
+        buy_sell_trun = np.zeros((num_batches,batch_size, order_stream + history,1200,1))
 
     for i in range(num_batches):
         for j in range(batch_size):
             #the length of one block is order_stream + history(this is where we put history in)
             buy_sell_trun[i,j,:,:,:] = buy_sell_array[step_size*(i*batch_size+j):step_size*(i*batch_size+j)+ order_stream + history,:,:]
+    print(buy_sell_array.shape)
     return buy_sell_trun
 
 def read_multiple_days_data():
