@@ -192,7 +192,7 @@ class lstm_cond_gan(object):
 
 
 class lstm_cond_gan_01(object):
-    def __init__(self, orderLength=1, historyLength=100,noiseLength=100,hist_noise_ratio=1,mini_batch_size=50,data_path=None,batch_size=32):
+    def __init__(self, orderLength=2, historyLength=100,noiseLength=100,hist_noise_ratio=1,mini_batch_size=50,data_path=None,batch_size=32):
         self.orderLength = orderLength
         self.historyLength = historyLength
         self.noiseLength = noiseLength
@@ -254,18 +254,18 @@ class lstm_cond_gan_01(object):
         G.add(Activation('relu'))
         G.add(Reshape((int(self.mini_batch_size), int(self.orderLength), 100)))
         G.add(UpSampling2D())
-        G.add(Conv2DTranspose(16, 5, padding='same'))
+        G.add(Conv2DTranspose(16, 32, padding='same'))
         G.add(BatchNormalization())
         G.add(Activation('relu'))
         G.add(Dropout(dropout))
         G.add(UpSampling2D())
-        G.add(Conv2DTranspose(8, 5, padding='same'))
+        G.add(Conv2DTranspose(8, 32, padding='same'))
         G.add(BatchNormalization())
         G.add(Activation('relu'))
-        G.add(Conv2DTranspose(4, 5, padding='same'))
+        G.add(Conv2DTranspose(4, 32, padding='same'))
         G.add(Activation('relu'))
         G.add(MaxPooling2D((2,2)))
-        G.add(Conv2DTranspose(1, 5, padding='same'))
+        G.add(Conv2DTranspose(1, 32, padding='same'))
         G.add(Activation('tanh'))
         G.add(MaxPooling2D((2,2)))
         self.G = G
@@ -290,7 +290,7 @@ class lstm_cond_gan_01(object):
         #D.add(BatchNormalization())
         D.add(Activation('relu'))
         D.add(Flatten())
-        D.add(MinibatchDiscrimination(20,5))
+        D.add(MinibatchDiscrimination(200,5))
         D.add(Dense(1))
         #D.add(Activation('sigmoid'))
         self.D = D
@@ -339,8 +339,8 @@ class lstm_cond_gan_01(object):
             ## train/fake init
             idx = np.random.randint(0, data.shape[0])
             orderStreams_train = self.normalize(data[idx])
-            orderStreams_train_history = orderStreams_train[:,:self.historyLength,1:,0]
-            orderStreams_train_truth = orderStreams_train[:,self.historyLength:,1:,0:1]
+            orderStreams_train_history = orderStreams_train[:,:self.historyLength,:,0]
+            orderStreams_train_truth = orderStreams_train[:,self.historyLength:,:,0:1]
             positive_y = np.ones((batch_size, 1), dtype=np.float32)
             negative_y = -positive_y
             dummy_y = np.zeros((batch_size, 1), dtype=np.float32)
@@ -357,14 +357,14 @@ class lstm_cond_gan_01(object):
                self.gen.save('gnr')
                #np.save('gen_'+str(i)+'.npy',generator)
 
-    def predict(self,save_path='predict.npy',length=5000,step_size=50,num_runs=100):
+    def predict(self,save_path='predict.npy',length=5000,step_size=50,num_runs=1):
         data = np.load(self.data_path, mmap_mode='r')
         gen = load_model('gnr')
         #np.save('weights.npy',gen.get_layer('dense_1').get_weights()[0])
         generated_orders = np.zeros((num_runs, length*step_size+self.historyLength,self.orderLength))
         for j in range(num_runs):
             idx = np.random.randint(0, data.shape[0])
-            history = self.normalize(data[idx,1,:self.historyLength,1:,0])
+            history = self.normalize(data[idx,1,:self.historyLength,:,0])
             generated_orders[j,:self.historyLength,:] = self.denormalize(history)
             for i in range(length):
                 noise = np.random.uniform(-1,1,size=[1, self.noiseLength])
