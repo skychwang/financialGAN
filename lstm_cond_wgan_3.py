@@ -19,13 +19,13 @@ class RandomWeightedAverage(_Merge):
 
 
 class lstm_cond_gan(object):
-    def __init__(self, history_ol=2400, orderLength=600, historyLength=100,noiseLength=100,hist_noise_ratio=2,mini_batch_size=50,data_path=None,data_cancel_path=None,batch_size=32):
+    def __init__(self, history_ol=2400, orderLength=600, historyLength=100,noiseLength=100,hist_noise_ratio=0.05,mini_batch_size=1,data_path=None,data_cancel_path=None,batch_size=32):
         self.history_ol = history_ol
         self.orderLength = orderLength
         self.historyLength = historyLength
         self.noiseLength = noiseLength
         self.hist_noise_ratio = hist_noise_ratio
-        self.lstm_out_length = self.noiseLength * self.hist_noise_ratio
+        self.lstm_out_length = int(self.noiseLength * self.hist_noise_ratio)
         self.mini_batch_size = mini_batch_size
         self.data_path = data_path
         self.data_cancel_path = data_cancel_path
@@ -69,8 +69,9 @@ class lstm_cond_gan(object):
         attention_mul = self.attention_3d_block(history_input)
         lstm_output = LSTM(self.lstm_out_length)(attention_mul)
         #D lstm with attention mechamism
-        attention_mul_d = self.attention_3d_block(history_input)
-        lstm_output_d = LSTM(self.orderLength)(attention_mul_d)
+        #attention_mul_d = self.attention_3d_block(history_input)
+        lstm_output_h = LSTM(self.lstm_out_length)(history_input)
+        lstm_output_d = Dense(self.orderLength)(lstm_output_h)
 
 
         # merge with noise
@@ -80,11 +81,11 @@ class lstm_cond_gan(object):
         #generator
         dropout = 0.5
         G = Sequential(name='generator')
-        G.add(Dense(self.orderLength*self.mini_batch_size, input_dim=self.noiseLength+self.lstm_out_length))
+        G.add(Dense(self.orderLength*self.mini_batch_size*25, input_dim=self.noiseLength+self.lstm_out_length))
         G.add(BatchNormalization())
         G.add(Activation('relu'))
-        G.add(Reshape((int(self.mini_batch_size/10), int(self.orderLength/10), 100)))
-        G.add(UpSampling2D(size=5))
+        G.add(Reshape((int(self.mini_batch_size), int(self.orderLength), 25)))
+        G.add(UpSampling2D())
         G.add(Conv2DTranspose(16, 5, padding='same'))
         G.add(BatchNormalization())
         G.add(Activation('relu'))
@@ -93,8 +94,10 @@ class lstm_cond_gan(object):
         G.add(Conv2DTranspose(8, 5, padding='same'))
         G.add(BatchNormalization())
         G.add(Activation('relu'))
+        G.add(MaxPooling2D((2,2)))
         G.add(Conv2DTranspose(4, 5, padding='same'))
         G.add(Activation('relu'))
+        G.add(MaxPooling2D((2,2)))
         G.add(Conv2DTranspose(1, 5, padding='same'))
         G.add(Activation('tanh'))
         self.G = G
@@ -109,11 +112,11 @@ class lstm_cond_gan(object):
 
         #discriminator
         D = Sequential(name='discriminator')
-        D.add(Conv2D(32,(3,3),  input_shape=(self.mini_batch_size+1, self.orderLength,1)))
+        D.add(Conv2D(32,(3,3),padding='same',  input_shape=(self.mini_batch_size+1, self.orderLength,1)))
         D.add(Activation('relu'))
         #D.add(Conv2D(128, (3,3)))
         #D.add(Activation('relu'))
-        D.add(Conv2D(16,(3,3)))
+        D.add(Conv2D(16,(3,3),padding='same'))
         D.add(Activation('relu'))
         D.add(Flatten())
         D.add(Dense(1))
@@ -132,7 +135,7 @@ class lstm_cond_gan(object):
         self.model_fake = Model(inputs=[history_input, noise_input], outputs= discriminator_output_fake)
         optimizer = Adam(0.0005, beta_1=0.5, beta_2=0.9)
         self.gen.compile(optimizer=optimizer, loss='binary_crossentropy')
-        self.gen.summary()
+        #self.gen.summary()
         for layer in self.model_truth.layers:
             layer.trainable = False
         self.model_truth.get_layer(name='discriminator').trainable = True
@@ -141,7 +144,7 @@ class lstm_cond_gan(object):
             layer.trainable = True
         self.model_fake.get_layer(name='discriminator').trainable = False
         self.model_fake.compile(optimizer=optimizer, loss=self.w_loss)
-        self.model_fake.summary()
+        #self.model_fake.summary()
         self.model_truth.summary()
 
     def normalize(self, array, maxV=None, minV=0, high=1, low=-1):
@@ -156,7 +159,7 @@ class lstm_cond_gan(object):
         return (np.log((a-normArray)/(a+1))/np.log((a+1)/(a-1)))**2*maxV
         #return ((((normArray - high) * (maxV - minV))/(high - low)) + maxV)
 
-    def fit(self, train_steps=2001, buy_sell_tag=0, batch_size=32, gnr_path='gnr'):
+    def fit(self, train_steps=10001, buy_sell_tag=0, batch_size=32, gnr_path='gnr'):
         data = np.load(self.data_path, mmap_mode='r')
         data_max = np.amax(data)
         data_cancel = np.load(self.data_cancel_path, mmap_mode='r')
@@ -179,13 +182,13 @@ class lstm_cond_gan(object):
 	        # output
             log_mesg = "%d: [D_fake loss: %f,D_truth loss: %f] " % (i, d_loss[0],d_loss[1])
             log_mesg = "%s  [A loss: %f]" % (log_mesg, a_loss)
-            print(log_mesg)
-            if i % 100 == 0:
+            #print(log_mesg)
+            if i % 1000 == 0:
                #generator =self.denormalize(self.gen.predict([orderStreams_train_history, noise]),maxV=data_max)
                #print(np.sum(np.round(generator)>100))
                self.gen.save(gnr_path+'_'+str(i))
 
-    def predict(self,save_path='predict.npy',length=5000,step_size=50,num_runs=1):
+    def predict(self,save_path='predict.npy',length=5000,step_size=1,num_runs=1):
         data = np.load(self.data_path, mmap_mode='r')
         data_cancel = np.load(self.data_cancel_path, mmap_mode='r')
         gen_buy = load_model('gnr_buy_2000')
