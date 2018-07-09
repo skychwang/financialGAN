@@ -6,7 +6,7 @@ import scipy.ndimage as ndimage
 import datetime
 import time
 
-def read_one_day_data(out_path, out_cancel_path,zero_one=False):
+def read_one_day_data(out_path, out_cancel_path,zero_one=True):
     '''
     Input:
     out_path: path of excel file
@@ -54,9 +54,9 @@ def read_one_day_data(out_path, out_cancel_path,zero_one=False):
                 buy_sell_array[int(time_index[i]),1,:] = 1
 
         for i in range(len(buy_cancel_vector)):
-            if buy_vector_cancel[i] and time_index_cancel[i] > time_start and time_index_cancel[i] - time_start < max_t:
+            if buy_cancel_vector[i] and time_index_cancel[i] > time_start and time_index_cancel[i] - time_start < max_t:
                 buy_sell_array[int(time_index_cancel[i]),2,:] = 1
-            if sell_vector_cancel[i] and time_index_cancel[i] > time_start and time_index_cancel[i] - time_start < max_t:
+            if sell_cancel_vector[i] and time_index_cancel[i] > time_start and time_index_cancel[i] - time_start < max_t:
                 buy_sell_array[int(time_index_cancel[i]),3,:] = 1
     #Q-GAN
     else:
@@ -100,7 +100,7 @@ def read_multiple_days_data():
         tgt_path = os.path.join('NPY/'+raw_orders[i].replace('.json','.npy'))
         np.save(tgt_path, read_one_day_data(raw_path,cancel_path))
 
-def reshape_data(buy_sell_array, zero_one=False, history=100,order_stream=1,step_size=1,batch_size=32):
+def reshape_data(buy_sell_array, zero_one=True, history=100,order_stream=1,step_size=1,batch_size=32):
     num_samples = int(np.floor((buy_sell_array.shape[0]-history - order_stream + step_size)/(step_size)));
     if zero_one:
         buy_sell_trun = np.zeros((num_samples, order_stream + history,4,1))
@@ -133,7 +133,7 @@ def reshape_data(buy_sell_array, zero_one=False, history=100,order_stream=1,step
 
 
 
-def aggregate_multi_days_data(zero_one=False, history = 100, order_stream=1,step_size=1, batch_size=32):
+def aggregate_multi_days_data(zero_one=True, history = 100, order_stream=1,step_size=1, batch_size=32):
     raw_path = [file for file in os.listdir("NPY/") if file.endswith("_100.npy")]
     raw_data = np.load("NPY/" + raw_path[0])
     for i in range(1,len(raw_path)):
