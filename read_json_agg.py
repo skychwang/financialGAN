@@ -48,15 +48,15 @@ def read_one_day_data(out_path, out_cancel_path,zero_one=True):
         buy_sell_array = np.zeros(((max_t),4,1))
         #fill in ones
         for i in range(len(buy_vector)):
-            if buy_vector[i] and time_index[i] > time_start and time_index[i] - time_start < max_t:
+            if buy_vector[i] and time_index[i] > 0 and time_index[i] < max_t:
                 buy_sell_array[int(time_index[i]),0,:] = 1
-            if sell_vector[i] and time_index[i] > time_start and time_index[i] - time_start < max_t:
+            if sell_vector[i] and time_index[i] > 0 and time_index[i] < max_t:
                 buy_sell_array[int(time_index[i]),1,:] = 1
 
         for i in range(len(buy_cancel_vector)):
-            if buy_cancel_vector[i] and time_index_cancel[i] > time_start and time_index_cancel[i] - time_start < max_t:
+            if buy_cancel_vector[i] and time_index_cancel[i] > 0 and time_index_cancel[i] < max_t:
                 buy_sell_array[int(time_index_cancel[i]),2,:] = 1
-            if sell_cancel_vector[i] and time_index_cancel[i] > time_start and time_index_cancel[i] - time_start < max_t:
+            if sell_cancel_vector[i] and time_index_cancel[i] > 0 and time_index_cancel[i] < max_t:
                 buy_sell_array[int(time_index_cancel[i]),3,:] = 1
     #Q-GAN
     else:
@@ -99,6 +99,7 @@ def read_multiple_days_data():
 
         tgt_path = os.path.join('NPY/'+raw_orders[i].replace('.json','.npy'))
         np.save(tgt_path, read_one_day_data(raw_path,cancel_path))
+        #np.save(tgt_path, reshape_data(read_one_day_data(raw_path,cancel_path)))
 
 def reshape_data(buy_sell_array, zero_one=True, history=100,order_stream=1,step_size=1,batch_size=32):
     num_samples = int(np.floor((buy_sell_array.shape[0]-history - order_stream + step_size)/(step_size)));
