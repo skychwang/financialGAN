@@ -25,7 +25,7 @@ def read_one_day_data(out_path, out_cancel_path,zero_one=False):
     month = int(parse_time[:2])
     date = int(parse_time[2:4])
     year = 2000 + int(parse_time[4:6])
-    time_start = datetime.datetime(year, month, date, 9, 30, 0, 0)
+    time_start = datetime.datetime(year, month, date, 9, 50, 0, 0)
     time_start = time.mktime(time_start.timetuple())
 
     time_vector = order['time'].values
@@ -41,10 +41,10 @@ def read_one_day_data(out_path, out_cancel_path,zero_one=False):
     time_index_cancel = (time_cancel_vector - time_start)/100
     time_index_cancel = time_index_cancel.astype(int)
 
-    #zero-one GAN
+    #T-GAN
     if zero_one:
         #time range is defined by max_t
-        max_t = 234000
+        max_t = 210000
         buy_sell_array = np.zeros(((max_t),4,1))
         #fill in ones
         for i in range(len(buy_vector)):
@@ -58,9 +58,9 @@ def read_one_day_data(out_path, out_cancel_path,zero_one=False):
                 buy_sell_array[int(time_index[i]),2,:] = 1
             if sell_vector_cancel[i]:
                 buy_sell_array[int(time_index[i]),3,:] = 1
-
+    #Q-GAN
     else:
-        max_t = 234000
+        max_t = 210000
         buy_sell_array = np.zeros((max_t,2400,1))
         for i in range(len(buy_vector)):
             for price,size in buy_vector[i].items():
@@ -86,18 +86,17 @@ def read_one_day_data(out_path, out_cancel_path,zero_one=False):
         assert j == zero_one_sum
         buy_sell_array = buy_sell_trun
 
-    # Reshape(implement sliding window here)
-    # Compute Number of Batches
     print(buy_sell_array.shape)
     return buy_sell_array
 
 def read_multiple_days_data():
     raw_orders = [file for file in os.listdir("output/") if file.endswith(".json")]
     raw_orders_cancel = [file for file in os.listdir("output_cancel/") if file.endswith(".json")]
+
     for i in range(len(raw_orders)):
-        #we put cancel orders into seperate files
         raw_path = os.path.join('output/'+raw_orders[i])
         cancel_path = os.path.join('output_cancel/'+raw_orders_cancel[i])
+
         tgt_path = os.path.join('NPY/'+raw_orders[i].replace('.json','.npy'))
         np.save(tgt_path, read_one_day_data(raw_path,cancel_path))
 
@@ -140,8 +139,11 @@ def aggregate_multi_days_data(zero_one=False, history = 100, order_stream=1,step
     for i in range(1,len(raw_path)):
         raw_data = np.concatenate((raw_data,np.load("NPY/" + raw_path[i])))
 
-    #np.save("NPY/agg_data.npy",reshape_data(raw_data))
-    np.save('NPY_1/agg_data.npy',raw_data)
+    #Generate NPY(reshaped)
+    np.save("NPY/agg_data.npy",reshape_data(raw_data))
+
+    #Generate NPY_1(non-reshaped)
+    #np.save('NPY_1/agg_data.npy',raw_data)
 
 
 if __name__ == '__main__':
