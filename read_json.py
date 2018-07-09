@@ -4,7 +4,7 @@ import os
 import sys
 import scipy.ndimage as ndimage
 
-def read_one_day_data(out_path, zero_one=False, history = 100, order_stream=50,step_size=50, batch_size=32):
+def read_one_day_data(out_path, zero_one=True, history = 100, order_stream=50,step_size=50, batch_size=32):
     '''
     Input:
     out_path: path of excel file
@@ -48,19 +48,49 @@ def read_one_day_data(out_path, zero_one=False, history = 100, order_stream=50,s
 
     # Reshape(implement sliding window here)
     # Compute Number of Batches
-    num_batches = int(np.floor((buy_sell_array.shape[0]-history - order_stream + step_size)/(step_size*batch_size)))
+    #num_batches = int(np.floor((buy_sell_array.shape[0]-history - order_stream + step_size)/(step_size*batch_size)))
+
+    #if zero_one:
+    #    buy_sell_trun = np.zeros((num_batches,batch_size, order_stream + history,2,1))
+    #else:
+    #    buy_sell_trun = np.zeros((num_batches,batch_size, order_stream + history,1200,1))
+
+    #for i in range(num_batches):
+    #    for j in range(batch_size):
+    #        #the length of one block is order_stream + history(this is where we put history in)
+    #        buy_sell_trun[i,j,:,:,:] = buy_sell_array[step_size*(i*batch_size+j):step_size*(i*batch_size+j)+ order_stream + history,:,:]
+    #print(buy_sell_array.shape)
+
+    #independent between within each batch
+    num_samples = int(np.floor((buy_sell_array.shape[0]-history - order_stream + step_size)/(step_size)));
+    if zero_one:
+        buy_sell_trun = np.zeros((num_samples, order_stream + history,2,1))
+    else:
+        buy_sell_trun = np.zeros((num_samples, order_stream + history,1200,1))
+
+    for i in range(num_samples):
+            buy_sell_trun[i,:,:,:] = buy_sell_array[step_size*i:step_size*i+history+order_stream,:,:]
+
+    num_groups = int(np.ceil((2 * history + order_stream)/step_size))
+    buy_sell = buy_sell_trun[::num_groups]
+    for i in range(1,num_groups):
+        buy_sell = np.concatenate((buy_sell,buy_sell_trun[i::num_groups]))
+
+    num_batches = int(np.floor((buy_sell.shape[0])/(batch_size)))
 
     if zero_one:
-        buy_sell_trun = np.zeros((num_batches,batch_size, order_stream + history,2,1))
+        buy_sell_output = np.zeros((num_batches,batch_size, order_stream + history,2,1))
     else:
-        buy_sell_trun = np.zeros((num_batches,batch_size, order_stream + history,1200,1))
+        buy_sell_output = np.zeros((num_batches,batch_size, order_stream + history,1200,1))
 
     for i in range(num_batches):
-        for j in range(batch_size):
+        #for j in range(batch_size):
             #the length of one block is order_stream + history(this is where we put history in)
-            buy_sell_trun[i,j,:,:,:] = buy_sell_array[step_size*(i*batch_size+j):step_size*(i*batch_size+j)+ order_stream + history,:,:]
-    print(buy_sell_array.shape)
-    return buy_sell_trun
+        buy_sell_output[i,:,:,:,:] = buy_sell[i*batch_size:(i+1)*batch_size,:,:,:]
+    print(buy_sell_output.shape)
+
+
+    return buy_sell_output
 
 def read_multiple_days_data():
     raw_orders = [file for file in os.listdir("output/") if file.endswith(".json")]

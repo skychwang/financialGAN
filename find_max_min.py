@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 def get_max_min_of_multiple_days():
-    order_books = [file for file in os.listdir("RMD/PN_OB/") if file.startswith("PN_OB")]
+    order_books = [file for file in os.listdir("RMD/") if file.startswith("PN_OB")]
     current_max_buy = 0
     current_min_buy = np.inf
     current_max_sell = 0
@@ -42,7 +42,7 @@ def get_max_min_of_multiple_days():
 
 
 def get_max_min_of_one_day(order_filename):
-    sheet = pd.read_excel("RMD/PN_OB/" + order_filename)
+    sheet = pd.read_excel("RMD/" + order_filename)
     max_buy = np.amax(sheet["BID_PRICE"])
     min_buy = np.amin(sheet["BID_PRICE"])
     max_sell = np.amax(sheet["ASK_PRICE"])

@@ -17,9 +17,9 @@ class RandomWeightedAverage(_Merge):
         weights = K.random_uniform((32, 1, 1,1))
         return (weights * inputs[0]) + ((1 - weights) * inputs[1])
 
-
+#Q-GAN
 class lstm_cond_gan(object):
-    def __init__(self, history_ol=2400, orderLength=600, historyLength=100,noiseLength=100,hist_noise_ratio=0.05,mini_batch_size=1,data_path=None,data_cancel_path=None,batch_size=32):
+    def __init__(self, history_ol=2400, orderLength=600, historyLength=100,noiseLength=100,hist_noise_ratio=0.05,mini_batch_size=1,data_path=None,batch_size=32):
         self.history_ol = history_ol
         self.orderLength = orderLength
         self.historyLength = historyLength
@@ -28,7 +28,6 @@ class lstm_cond_gan(object):
         self.lstm_out_length = int(self.noiseLength * self.hist_noise_ratio)
         self.mini_batch_size = mini_batch_size
         self.data_path = data_path
-        self.data_cancel_path = data_cancel_path
         self.batch_size = batch_size
         self.model = None
         self.build()
@@ -51,8 +50,9 @@ class lstm_cond_gan(object):
         return K.mean(y_true*y_pred)
 
     def attention_3d_block(self,inputs,SINGLE_ATTENTION_VECTOR=False):
+        input_dim = int(inputs.shape[1])
         a = Permute((2, 1))(inputs)
-        a = Dense(self.historyLength, activation='softmax')(a)
+        a = Dense(input_dim, activation='softmax')(a)
         if SINGLE_ATTENTION_VECTOR:
             a = Lambda(lambda x: K.mean(x, axis=1))(a)
             a = RepeatVector(self.history_ol)(a)
@@ -65,12 +65,13 @@ class lstm_cond_gan(object):
         if self.model:
             return self.model
         # lstm cell, to do : attention mechanism
-        history_input = Input(shape=(self.historyLength, self.history_ol), name='history_input')
+        history_input = Input(shape=(self.historyLength+self.mini_batch_size, self.history_ol), name='history_input')
         attention_mul = self.attention_3d_block(history_input)
         lstm_output = LSTM(self.lstm_out_length)(attention_mul)
         #D lstm with attention mechamism
         #attention_mul_d = self.attention_3d_block(history_input)
-        lstm_output_h = LSTM(self.lstm_out_length)(history_input)
+        history_input_h = Input(shape=(self.historyLength, self.history_ol), name='history_input_h')
+        lstm_output_h = LSTM(self.lstm_out_length)(history_input_h)
         lstm_output_d = Dense(self.orderLength)(lstm_output_h)
 
 
@@ -131,11 +132,11 @@ class lstm_cond_gan(object):
         partial_gp_loss.__name__ = 'gradient_penalty'  # Functions need names or Keras will throw an error
 
         self.gen = Model(inputs=[history_input, noise_input], outputs= generator_output)
-        self.model_truth = Model(inputs=[history_input, noise_input, truth_input], outputs= [discriminator_output_fake,discriminator_output_truth,averaged_samples_output])
-        self.model_fake = Model(inputs=[history_input, noise_input], outputs= discriminator_output_fake)
+        self.model_truth = Model(inputs=[history_input,history_input_h,noise_input, truth_input], outputs= [discriminator_output_fake,discriminator_output_truth,averaged_samples_output])
+        self.model_fake = Model(inputs=[history_input, history_input_h,noise_input], outputs= discriminator_output_fake)
         optimizer = Adam(0.0005, beta_1=0.5, beta_2=0.9)
         self.gen.compile(optimizer=optimizer, loss='binary_crossentropy')
-        #self.gen.summary()
+        self.gen.summary()
         for layer in self.model_truth.layers:
             layer.trainable = False
         self.model_truth.get_layer(name='discriminator').trainable = True
@@ -147,22 +148,24 @@ class lstm_cond_gan(object):
         #self.model_fake.summary()
         self.model_truth.summary()
 
-    def normalize(self, array, maxV=None, minV=0, high=1, low=-1):
+    def normalize(self, array, maxV=63675, minV=0, high=1, low=-1):
         a =1.0001
-        maxV=np.amax(np.load(self.data_path, mmap_mode='r'))
         #return (high - (((high - low) * (maxV - array)) / (maxV - minV)))
         return   a-(a+1)*np.exp(-(array/maxV)**0.5*np.log((a+1)/(a-1)))
 
-    def denormalize(self, normArray, maxV=None, minV=0, high=1, low=-1):
+    def denormalize(self, normArray, maxV=63675, minV=0, high=1, low=-1):
         a= 1.0001
-        maxV=np.amax(np.load(self.data_path, mmap_mode='r'))
         return (np.log((a-normArray)/(a+1))/np.log((a+1)/(a-1)))**2*maxV
         #return ((((normArray - high) * (maxV - minV))/(high - low)) + maxV)
 
+    def normalize_01(self, array, maxV=1, minV=0, high=1, low=-1):
+        return (high - (((high - low) * (maxV - array)) / (maxV - minV)))
+
+    def denormalize_01(self, normArray, maxV=1, minV=0, high=1, low=-1):
+        return ((((normArray - high) * (maxV - minV))/(high - low)) + maxV)
+
     def fit(self, train_steps=10001, buy_sell_tag=0, batch_size=32, gnr_path='gnr'):
         data = np.load(self.data_path, mmap_mode='r')
-        data_max = np.amax(data)
-        data_cancel = np.load(self.data_cancel_path, mmap_mode='r')
         for i in range(train_steps):
             ## gen noise init
             positive_y = np.ones((batch_size, 1), dtype=np.float32)
@@ -172,13 +175,17 @@ class lstm_cond_gan(object):
             for j in range(10):
                 noise = np.random.uniform(-1,1 , size=[batch_size, self.noiseLength])
                 ## train/fake init
-                idx = np.random.randint(0, data_cancel.shape[0])
-                orderStreams_train = np.concatenate((self.normalize(data[idx],maxV=data_max),self.normalize(data_cancel[idx],maxV=data_max)),axis=-2)
-                orderStreams_train_history = orderStreams_train[:,:self.historyLength,:,0]
+                idx = np.random.randint(0, data.shape[0])
+                data_normalize= self.normalize(data[idx])
+                data_normalize_01 = self.normalize_01(data[idx]>0)
+                orderStreams_train = data_normalize
+                orderStreams_train_01 = data_normalize_01
+                orderStreams_train_history = np.concatenate((orderStreams_train[:,:self.historyLength,:,0],orderStreams_train_01[:,self.historyLength:,:,0]),axis=1)
+                orderStreams_train_history_h = orderStreams_train[:,:self.historyLength,:,0]
                 orderStreams_train_truth = orderStreams_train[:,self.historyLength:,buy_sell_tag*600:(buy_sell_tag+1)*600,0:1]
-                d_loss = self.model_truth.train_on_batch([orderStreams_train_history,noise,orderStreams_train_truth], [negative_y,positive_y,dummy_y])
+                d_loss = self.model_truth.train_on_batch([orderStreams_train_history,orderStreams_train_history_h,noise,orderStreams_train_truth], [negative_y,positive_y,dummy_y])
 
-            a_loss = self.model_fake.train_on_batch([orderStreams_train_history,noise], positive_y)
+            a_loss = self.model_fake.train_on_batch([orderStreams_train_history,orderStreams_train_history_h,noise], positive_y)
 	        # output
             log_mesg = "%d: [D_fake loss: %f,D_truth loss: %f] " % (i, d_loss[0],d_loss[1])
             log_mesg = "%s  [A loss: %f]" % (log_mesg, a_loss)
@@ -188,44 +195,44 @@ class lstm_cond_gan(object):
                #print(np.sum(np.round(generator)>100))
                self.gen.save(gnr_path+'_'+str(i))
 
-    def predict(self,save_path='predict.npy',length=5000,step_size=1,num_runs=1):
+    def predict(self,save_path='predict.npy',length=250000,step_size=1,num_runs=1):
         data = np.load(self.data_path, mmap_mode='r')
-        data_cancel = np.load(self.data_cancel_path, mmap_mode='r')
-        gen_buy = load_model('gnr_buy_2000')
-        gen_sell = load_model('gnr_sell_2000')
-        gen_cancel_buy = load_model('gnr_cancel_buy_2000')
-        gen_cancel_sell = load_model('gnr_cancel_sell_2000')
-        #np.save('weights.npy',gen.get_layer('dense_1').get_weights()[0])
+        gen_buy = load_model('gnr_buy_10000')
+        gen_sell = load_model('gnr_sell_10000')
+        gen_cancel_buy = load_model('gnr_cancel_buy_10000')
+        gen_cancel_sell = load_model('gnr_cancel_sell_10000')
         generated_orders = np.zeros((num_runs, length*step_size+self.historyLength,4*self.orderLength))
         for j in range(num_runs):
-            idx = np.random.randint(0, data_cancel.shape[0])
-            history = np.concatenate((self.normalize(data[idx,1,:self.historyLength,:,0]),self.normalize(data_cancel[idx,1,:self.historyLength,:,0])),axis=-1)
+            history = self.normalize(data[:self.historyLength,:,0])
+            future = self.normalize_01(data[self.historyLength:self.historyLength+self.mini_batch_size,:,0]>0)
+            history_d = np.concatenate((history,future),axis=0)
             generated_orders[j,:self.historyLength,:] = self.denormalize(history)
             for i in range(length):
-                #time_start = time.time()
                 noise = np.random.uniform(-1,1,size=[1, self.noiseLength])
-                orderStreams_buy = (gen_buy.predict([history.reshape((1,self.historyLength,self.history_ol)), noise]))
+                orderStreams_buy = (gen_buy.predict([np.expand_dims(history_d,0), noise]))
                 noise = np.random.uniform(-1,1,size=[1, self.noiseLength])
-                orderStreams_sell = (gen_sell.predict([history.reshape((1,self.historyLength,self.history_ol)), noise]))
+                orderStreams_sell = (gen_sell.predict([np.expand_dims(history_d,0), noise]))
                 noise = np.random.uniform(-1,1,size=[1, self.noiseLength])
-                orderStreams_cancel_buy = (gen_cancel_buy.predict([history.reshape((1,self.historyLength,self.history_ol)), noise]))
+                orderStreams_cancel_buy = (gen_cancel_buy.predict([np.expand_dims(history_d,0), noise]))
                 noise = np.random.uniform(-1,1,size=[1, self.noiseLength])
-                orderStreams_cancel_sell = (gen_cancel_sell.predict([history.reshape((1,self.historyLength,self.history_ol)), noise]))
+                orderStreams_cancel_sell = (gen_cancel_sell.predict([np.expand_dims(history_d,0), noise]))
                 generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,0:600] = self.denormalize(orderStreams_buy[:,:step_size,:,:]).reshape(step_size, self.orderLength)
                 generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,600:1200] = self.denormalize(orderStreams_sell[:,:step_size,:,:]).reshape(step_size, self.orderLength)
                 generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,1200:1800] = self.denormalize(orderStreams_cancel_buy[:,:step_size,:,:]).reshape(step_size, self.orderLength)
                 generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,1800:] = self.denormalize(orderStreams_cancel_sell[:,:step_size,:,:]).reshape(step_size, self.orderLength)
-                #print(time.time()-time_start)
-                history = generated_orders[j,(i+1)*step_size:self.historyLength+(i+1)*step_size,:]
-                if(i % 100 == 0 ):
+                #history = generated_order[j,(i+1)*step_size:self.historyLength+(i+1)*step_size,:]
+                history = self.normalize(data[(i+1)*step_size:self.historyLength+(i+1)*step_size,:,0])
+                future = self.normalize_01(data[(i+1)*step_size:self.historyLength+(i+1)*step_size,:,0]>0)
+                hitory_d = np.concatenate((history,future),axis=0)
+                #if(i % 100 == 0 ):
                     #print(np.sum(orderStreams>0.5))
-                    print(str(j)+' runs ' + str(i)+' steps')
+                    #print(str(j)+' runs ' + str(i)+' steps')
         np.save(save_path,generated_orders)
 
 
-
+#T-GAN
 class lstm_cond_gan_01(object):
-    def __init__(self, history_ol=4, orderLength=1, historyLength=100,noiseLength=100,hist_noise_ratio=2,mini_batch_size=50,data_path=None,data_cancel_path=None,batch_size=32):
+    def __init__(self, history_ol=4, orderLength=1, historyLength=100,noiseLength=100,hist_noise_ratio=2,mini_batch_size=1,data_path=None,batch_size=32):
         self.history_ol = history_ol
         self.orderLength = orderLength
         self.historyLength = historyLength
@@ -234,7 +241,6 @@ class lstm_cond_gan_01(object):
         self.lstm_out_length = self.noiseLength * self.hist_noise_ratio
         self.mini_batch_size = mini_batch_size
         self.data_path = data_path
-        self.data_cancel_path = data_cancel_path
         self.batch_size = batch_size
         self.model = None
         self.build()
@@ -362,19 +368,14 @@ class lstm_cond_gan_01(object):
         #print(len(self.model_fake.trainable_weights),len(self.model_fake._collected_trainable_weights))
 
     def normalize(self, array, maxV=1, minV=0, high=1, low=-1):
-        #a =1.0001
         return (high - (((high - low) * (maxV - array)) / (maxV - minV)))
-        #return   a-(a+1)*np.exp(-(array/maxV)**0.5*np.log((a+1)/(a-1)))
 
     def denormalize(self, normArray, maxV=1, minV=0, high=1, low=-1):
-        #a= 1.0001
-        #return (np.log((a-normArray)/(a+1))/np.log((a+1)/(a-1)))**2*maxV
         return ((((normArray - high) * (maxV - minV))/(high - low)) + maxV)
 
 
     def fit(self, train_steps=2001, buy_sell_tag=0, batch_size=32, gnr_path='gnr'):
         data = np.load(self.data_path, mmap_mode='r')
-        data_cancel = np.load(self.data_cancel_path, mmap_mode='r')
         for i in range(train_steps):
             ## gen noise init
             positive_y = np.ones((batch_size, 1), dtype=np.float32)
@@ -384,8 +385,8 @@ class lstm_cond_gan_01(object):
             for j in range(100):
                 noise = np.random.uniform(-1,1 , size=[batch_size, self.noiseLength])
                 ## train/fake init
-                idx = np.random.randint(0, data_cancel.shape[0])
-                orderStreams_train = np.concatenate((self.normalize(data[idx]),self.normalize(data_cancel[idx])),axis=-2)
+                idx = np.random.randint(0, data.shape[0])
+                orderStreams_train = self.normalize(data[idx])
                 orderStreams_train_history = orderStreams_train[:,:self.historyLength,:,0]
                 orderStreams_train_truth = orderStreams_train[:,self.historyLength:,buy_sell_tag:buy_sell_tag+1,0:1]
                 d_loss = self.model_truth.train_on_batch([orderStreams_train_history,noise,orderStreams_train_truth], [negative_y,positive_y,dummy_y])
@@ -400,18 +401,19 @@ class lstm_cond_gan_01(object):
                #print(np.sum(generator>0.5))
                self.gen.save(gnr_path+'_'+str(i))
 
-    def predict(self,save_path='predict.npy',length=5000,step_size=50,num_runs=1):
+    def predict(self,save_path='predict.npy',length=250000,step_size=1,num_runs=1):
         data = np.load(self.data_path, mmap_mode='r')
-        data_cancel = np.load(self.data_cancel_path, mmap_mode='r')
+
         gen_buy = load_model('gnr_buy')
         gen_sell = load_model('gnr_sell')
         gen_cancel_buy = load_model('gnr_cancel_buy')
         gen_cancel_sell = load_model('gnr_cancel_sell')
-        #np.save('weights.npy',gen.get_layer('dense_1').get_weights()[0])
-        generated_orders = np.zeros((num_runs, length*step_size+self.historyLength,4*self.orderLength))
+
+        generated_orders = np.zeros((num_runs, length*step_size+self.historyLength,4))
+
         for j in range(num_runs):
-            idx = np.random.randint(0, data_cancel.shape[0])
-            history = np.concatenate((self.normalize(data[idx,1,:self.historyLength,:,0]),self.normalize(data_cancel[idx,1,:self.historyLength,:,0])),axis=-1)
+            idx = np.random.randint(0, data.shape[0])
+            history = self.normalize(data[idx,1,:self.historyLength,:,0])
             generated_orders[j,:self.historyLength,:] = self.denormalize(history)
             for i in range(length):
                 #time_start = time.time()
@@ -426,16 +428,10 @@ class lstm_cond_gan_01(object):
                 generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,0:1] = self.denormalize(orderStreams_buy[:,:step_size,:,:]).reshape(step_size, self.orderLength)
                 generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,1:2] = self.denormalize(orderStreams_sell[:,:step_size,:,:]).reshape(step_size, self.orderLength)
                 generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,2:3] = self.denormalize(orderStreams_cancel_buy[:,:step_size,:,:]).reshape(step_size, self.orderLength)
-                generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,3:4] = self.denormalize(orderStreams_cancel_sell[:,:step_size,:,:]).reshape(step_size, self.orderLength)
+                generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,3:] = self.denormalize(orderStreams_cancel_sell[:,:step_size,:,:]).reshape(step_size, self.orderLength)
                 #print(time.time()-time_start)
                 history = generated_orders[j,(i+1)*step_size:self.historyLength+(i+1)*step_size,:]
-                if(i % 100 == 0 ):
+                #if(i % 100 == 0 ):
                     #print(np.sum(orderStreams>0.5))
-                    print(str(j)+' runs ' + str(i)+' steps')
+                    #print(str(j)+' runs ' + str(i)+' steps')
         np.save(save_path,generated_orders)
-
-
-if __name__ == '__main__':
-        gan = lstm_cond_gan()
-        gan.fit()
-        gan.predict()
