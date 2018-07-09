@@ -48,15 +48,15 @@ def read_one_day_data(out_path, out_cancel_path,zero_one=False):
         buy_sell_array = np.zeros(((max_t),4,1))
         #fill in ones
         for i in range(len(buy_vector)):
-            if buy_vector[i] and time_index[i] > time_start and time_index[i] - time_start < mat_t:
+            if buy_vector[i] and time_index[i] > time_start and time_index[i] - time_start < max_t:
                 buy_sell_array[int(time_index[i]),0,:] = 1
-            if sell_vector[i] and time_index[i] > time_start and time_index[i] - time_start < mat_t:
+            if sell_vector[i] and time_index[i] > time_start and time_index[i] - time_start < max_t:
                 buy_sell_array[int(time_index[i]),1,:] = 1
 
         for i in range(len(buy_cancel_vector)):
-            if buy_vector_cancel[i] and time_index_cancel[i] > time_start and time_index_cancel[i] - time_start < mat_t:
+            if buy_vector_cancel[i] and time_index_cancel[i] > time_start and time_index_cancel[i] - time_start < max_t:
                 buy_sell_array[int(time_index_cancel[i]),2,:] = 1
-            if sell_vector_cancel[i]:
+            if sell_vector_cancel[i] and time_index_cancel[i] > time_start and time_index_cancel[i] - time_start < max_t:
                 buy_sell_array[int(time_index_cancel[i]),3,:] = 1
     #Q-GAN
     else:
