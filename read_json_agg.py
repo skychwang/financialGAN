@@ -25,8 +25,8 @@ def read_one_day_data(out_path, out_cancel_path,zero_one=True):
     month = int(parse_time[:2])
     date = int(parse_time[2:4])
     year = 2000 + int(parse_time[4:6])
-    time_start = datetime.datetime(year, month, date, 9, 50, 0, 0)
-    time_start = time.mktime(time_start.timetuple())
+    time_start = datetime.datetime(year, month, date, 9, 50, 0, 000000)
+    time_start = time.mktime(time_start.timetuple())*1000
 
     time_vector = order['time'].values
     buy_vector = order['buy'].values
