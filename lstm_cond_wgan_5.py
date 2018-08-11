@@ -19,8 +19,8 @@ class RandomWeightedAverage(_Merge):
 
 #Q-GAN
 class lstm_cond_gan(object):
-    def __init__(self, history_ol=4, orderLength=4, historyLength=100,\
-        noiseLength=100,hist_noise_ratio=0.2,mini_batch_size=1,\
+    def __init__(self, history_ol=5, orderLength=5, historyLength=100,\
+        noiseLength=100,hist_noise_ratio=1,mini_batch_size=1,\
         data_path=None,batch_size=32):
         self.history_ol = history_ol
         self.orderLength = orderLength
@@ -73,7 +73,7 @@ class lstm_cond_gan(object):
         lstm_output = LSTM(self.lstm_out_length)(history_input)
         #D lstm with attention mechamism
         lstm_output_h = LSTM(self.lstm_out_length,name='lstm_critic')(history_input)
-        lstm_output_d = Dense(self.orderLength,name='dense_critic')(lstm_output_h)
+        #lstm_output_d = Dense(self.orderLength,name='dense_critic')(lstm_output_h)
 
 
         # merge with noise
@@ -106,22 +106,22 @@ class lstm_cond_gan(object):
         self.G = G
         generator_output = G(gen_input)
 
-        discriminator_input_fake = (Concatenate(axis=1)\
-            ([Reshape((1, self.orderLength,1))(lstm_output_d), generator_output]))
+        discriminator_input_fake = (Concatenate(axis=2)\
+            ([Reshape((1, self.lstm_out_length,1))(lstm_output_h), generator_output]))
         truth_input = Input(shape=(self.mini_batch_size,self.orderLength,1),name='truth_input')
-        discriminator_input_truth = Concatenate(axis=1)\
-            ([Reshape((1, self.orderLength,1))(lstm_output_d), truth_input])
+        discriminator_input_truth = Concatenate(axis=2)\
+            ([Reshape((1, self.lstm_out_length,1))(lstm_output_h), truth_input])
 
         #gradient penelty
         averaged_samples = RandomWeightedAverage()([discriminator_input_fake, discriminator_input_truth])
 
         #discriminator
         D = Sequential(name='discriminator')
-        D.add(Conv2D(32,(3,3),padding='same',  input_shape=(self.mini_batch_size+1, self.orderLength,1)))
+        D.add(Conv2D(512,(3,3),padding='same',  input_shape=(self.mini_batch_size, self.orderLength+self.historyLength,1)))
         D.add(Activation('relu'))
-        #D.add(Conv2D(128, (3,3)))
-        #D.add(Activation('relu'))
-        D.add(Conv2D(16,(3,3),padding='same'))
+        D.add(Conv2D(256, (3,3),padding='same'))
+        D.add(Activation('relu'))
+        D.add(Conv2D(128,(3,3),padding='same'))
         D.add(Activation('relu'))
         D.add(Flatten())
         D.add(Dense(1))
@@ -147,14 +147,14 @@ class lstm_cond_gan(object):
             layer.trainable = False
         self.model_truth.get_layer(name='discriminator').trainable = True
         self.model_truth.get_layer(name='lstm_critic').trainable = True
-        self.model_truth.get_layer(name='dense_critic').trainable = True
+        #self.model_truth.get_layer(name='dense_critic').trainable = True
         self.model_truth.compile(optimizer=optimizer, \
             loss=[self.w_loss,self.w_loss,partial_gp_loss])
         for layer in self.model_fake.layers:
             layer.trainable = True
         self.model_fake.get_layer(name='discriminator').trainable = False
         self.model_fake.get_layer(name='lstm_critic').trainable = False
-        self.model_fake.get_layer(name='dense_critic').trainable = False
+        #self.model_fake.get_layer(name='dense_critic').trainable = False
         self.model_fake.compile(optimizer=optimizer, loss=self.w_loss)
         self.model_fake.summary()
         self.model_truth.summary()
@@ -174,30 +174,31 @@ class lstm_cond_gan(object):
                 orderStreams_train = data[idx].copy()
                 orderStreams_train_history = orderStreams_train[:,:self.historyLength,:,0]
                 orderStreams_train_truth = orderStreams_train[:,self.historyLength:,:,0:1]
-                if(np.min(orderStreams_train_truth[:,:,1,0]==-1)):
+                if(np.min(orderStreams_train_truth[:,:,2,0])==-1):
                     continue
-                orderStreams_train_truth[:,:,1:2,0:1] =  ((orderStreams_train_truth[:,:,1:2,0:1] \
-                    - orderStreams_train[:,self.historyLength-1:self.historyLength,1:2,0:1]) - 0.1)/0.1
-                #print(orderStreams_train_truth[0,:,1:2,0])
+                orderStreams_train_truth[:,:,2:3,0:1] =  ((orderStreams_train_truth[:,:,2:3,0:1]\
+                    - orderStreams_train[:,self.historyLength-1:self.historyLength,2:3,0:1]) - 0.001)/0.001
+                if(np.min(orderStreams_train_truth[:,:,2,0])>1):
+                    continue
                 d_loss = self.model_truth.train_on_batch([orderStreams_train_history,noise,\
                     orderStreams_train_truth], [negative_y,positive_y,dummy_y])
 
+
             a_loss = self.model_fake.train_on_batch([orderStreams_train_history,noise], positive_y)
-	        # output
             log_mesg = "%d: [D_fake loss: %f,D_truth loss: %f] " % (i, d_loss[0],d_loss[1])
             log_mesg = "%s  [A loss: %f]" % (log_mesg, a_loss)
             print(log_mesg)
             if i % 1000 == 0:
                self.gen.save(gnr_path+'_'+str(i))
 
-    def predict(self,save_path='predict_new2_30000.npy',length=110000,step_size=1,num_runs=1):
+    def predict(self,save_path='predict_new5_35000_1.npy',length=4000,step_size=1,num_runs=20):
         data = np.load(self.data_path, mmap_mode='r')
         print(data.shape)
-        gen = load_model('gnr_new2_30000')
+        gen = load_model('gnr_new5_35000')
 
         generated_orders = np.zeros((num_runs, length*step_size+self.historyLength,self.orderLength))
         for j in range(num_runs):
-            history = data[:self.historyLength,:,0]
+            history = data[4500:4500+self.historyLength,:,0]
             generated_orders[j,:self.historyLength,:] = history
             for i in range(length):
                 noise = np.random.uniform(-1,1,size=[1, self.noiseLength])
@@ -206,13 +207,11 @@ class lstm_cond_gan(object):
 
                 generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,:] = orderStreams
 
-                result = [x if x < 0.05 else 0 for x in 0.1 * orderStreams[:,1] + 0.1]
-                result = [x if x< 1 else -1 for x in (result + data[self.historyLength+i*step_size-1,1,0])]
-                #generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,1] = (result + \
-                #      data[self.historyLength+i*step_size-1,1,0])
-                generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,1] = result
-                history = data[(i+1)*step_size:self.historyLength+(i+1)*step_size,:,0]
-                #history = generated_orders[j,(i+1)*step_size:self.historyLength+(i+1)*step_size,:]
+                result = [x if x < 1 else 0 for x in 0.001 * orderStreams[:,2] + 0.001]
+                result = [x if x< 1 else -1 for x in (result + generated_orders[j,self.historyLength+i*step_size-1,2])]
+                generated_orders[j,self.historyLength+i*step_size:self.historyLength+(i+1)*step_size,2] = result
+                #history = data[(i+1)*step_size:self.historyLength+(i+1)*step_size,:,0]
+                history = generated_orders[j,(i+1)*step_size:self.historyLength+(i+1)*step_size,:]
                 if(i % 100 == 0 ):
                     print(str(j)+' runs ' + str(i)+' steps')
         np.save(save_path,generated_orders)
