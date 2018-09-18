@@ -14,13 +14,13 @@ from discrimination import *
 
 class RandomWeightedAverage(_Merge):
     def _merge_function(self, inputs):
-        weights = K.random_uniform((128, 1, 1,1))
+        weights = K.random_uniform((64, 1, 1,1))
         return (weights * inputs[0]) + ((1 - weights) * inputs[1])
 
 class lstm_cond_gan(object):
     def __init__(self, history_ol=10, orderLength=8, historyLength=100,\
-        noiseLength=2,noiseLength_1 = 100,lstm_out_length=4,mini_batch_size=1,\
-        data_path=None,batch_size=128):
+        noiseLength=1,noiseLength_1 = 100,lstm_out_length=4,mini_batch_size=1,\
+        data_path=None,batch_size=64):
         self.history_ol = history_ol
         self.orderLength = orderLength
         self.historyLength = historyLength
@@ -90,6 +90,19 @@ class lstm_cond_gan(object):
         G.add(Dense(self.mini_batch_size * 100, input_dim=self.noiseLength+1))
         G.add(BatchNormalization())
         G.add(Activation('relu'))
+        #G.add(Dense(128))
+        #G.add(BatchNormalization())
+        #G.add(Activation('relu'))
+        #G.add(Dense(32))
+        #G.add(BatchNormalization())
+        #G.add(Activation('relu'))
+        #G.add(Dense(8))
+        #G.add(BatchNormalization())
+        #G.add(Activation('relu'))
+        #G.add(Dense(1))
+        #G.add(BatchNormalization())
+        #G.add(Activation('tanh'))
+        #G.add(Reshape((int(self.mini_batch_size), 1,1)))
         G.add(Reshape((int(self.mini_batch_size), 1, 100)))
         G.add(UpSampling2D())
         G.add(Conv2DTranspose(64, 32, padding='same'))
@@ -163,6 +176,7 @@ class lstm_cond_gan(object):
         D.add(Activation('relu'))
         D.add(Flatten())
         D.add(Dense(1))
+        #D.add(Activation('tanh'))
         self.D = D
         discriminator_output_fake = D(discriminator_input_fake)
         discriminator_output_truth = D(discriminator_input_truth)
@@ -229,17 +243,17 @@ class lstm_cond_gan(object):
         return data_new
 
 
-    def fit(self, train_steps=300001, buy_sell_tag=0, batch_size=128, gnr_path='gnr'):
+    def fit(self, train_steps=300001, buy_sell_tag=0, batch_size=64, gnr_path='gnr'):
         #self.gen = load_model('gnr_goog12_100000')
         data = np.load(self.data_path, mmap_mode='r')
         for i in range(train_steps):
             positive_y = np.ones((batch_size, 1), dtype=np.float32)
             negative_y = -positive_y
             dummy_y = np.zeros((batch_size, 1), dtype=np.float32)
-            no = np.random.uniform(-1, 1 , size=[data.shape[0],batch_size, self.noiseLength])
+            no = np.random.normal(0, 0.05 , size=[data.shape[0],batch_size, self.noiseLength])
             no_1 = np.random.uniform(-1, 1 , size=[data.shape[0],batch_size, self.noiseLength_1])
 
-            for j in range(10):
+            for j in range(100):
                 ## train/fake init
                 idx = np.random.randint(0, data.shape[0])
                 noise = no[idx]
@@ -256,11 +270,11 @@ class lstm_cond_gan(object):
             a_loss = self.model_fake.train_on_batch([history,history_full,noise,noise_1], positive_y)
             log_mesg = "%d: [D_fake loss: %f,D_truth loss: %f] " % (i, d_loss[0],d_loss[1])
             log_mesg = "%s  [A loss: %f]" % (log_mesg, a_loss)
-            with open('log_pn2.txt','a') as f:
+            with open('log_goog_new.txt','a') as f:
                 f.write(log_mesg+'\n')
                 f.close()
             #print(log_mesg)
-            if i % 5000 == 0:
+            if i % 1000 == 0:
                 self.gen.save(gnr_path+'_'+str(i))
 
     def denormalize(self, normArray):
@@ -268,10 +282,19 @@ class lstm_cond_gan(object):
             return ((((data - high) * (maxV - minV))/(high - low)) + maxV)
 
         Array = normArray.copy()
-        maxV =  [1.46,9,9,9,1,1,941.79,621]
-        minV = [0.27,0,0,0,0,0,916.13,0.659]
+        # GooG
+        maxV =  [2.34,9,9,9,1,1,941.79,680]
+        minV = [0.12,0,0,0,0,0,916.13,0.6]
+        # Syn32
+        #maxV =  [1.8,9,9,9,1,1,1,2]
+        #minV = [1.5,0,0,0,0,0,-1,0]
+        # Syn64
+        #maxV =  [3.8,9,9,9,1,1,1,2]
+        #minV = [3.5,0,0,0,0,0,-1,0]
+        #PN
         #maxV =  [46.5,9,9,9,1,1,12.68,635]
         #minV = [12.7,0,0,0,0,0,6.41,0.82]
+        #PN
         #maxV =  [46.5,9,9,9,1,1,12.68,635]
         #minV = [6.54,0,0,0,0,0,6.41,0.8]
         for i in range(Array.shape[2]):
@@ -287,10 +310,19 @@ class lstm_cond_gan(object):
             return (high - (((high - low) * (maxV - array)) / (maxV - minV)))
 
         Array = normArray.copy()
-        maxV =  [1.46,9,9,9,1,1,941.79,621]
-        minV = [0.27,0,0,0,0,0,916.13,0.659]
+        # GooG
+        maxV =  [2.34,9,9,9,1,1,941.79,680]
+        minV = [0.12,0,0,0,0,0,916.13,0.6]
+        # Syn32
+        #maxV =  [1.8,9,9,9,1,1,1,2]
+        #minV = [1.5,0,0,0,0,0,-1,0]
+        # Syn64
+        #maxV =  [3.8,9,9,9,1,1,1,2]
+        #minV = [3.5,0,0,0,0,0,-1,0]
+        #PN
         #maxV =  [46.5,9,9,9,1,1,12.68,635]
         #minV = [12.7,0,0,0,0,0,6.41,0.82]
+        #PN
         #maxV =  [46.5,9,9,9,1,1,12.68,635]
         #minV = [6.54,0,0,0,0,0,6.41,0.8]
         if Array.shape[2] == 4:
@@ -312,7 +344,7 @@ class lstm_cond_gan(object):
 
 
 
-    def predict(self,save_path='predict_goog26_80000.npy',length=4000000,step_size=1,num_runs=1):
+    def predict(self,save_path='predict_goog_short_5000.npy',length=4000000,step_size=1,num_runs=1):
         def translate_time(time):
             transfered_time = []
             for _ in range(6):
@@ -322,7 +354,7 @@ class lstm_cond_gan(object):
             return transfered_time
 
         data = np.load(self.data_path, mmap_mode='r')
-        gen = load_model('gnr_goog26_80000')
+        gen = load_model('gnr_goog_short_5000')
         #re = np.zeros((num_runs,length*step_size+self.historyLength,2))
         generated_orders = np.zeros((num_runs, length*step_size+self.historyLength,6))
         for j in range(num_runs):
@@ -331,7 +363,7 @@ class lstm_cond_gan(object):
             history_full = np.mean(self.normalize(data[0,0:1,:100,6:,0]),1)
             #generated_orders[j,:self.historyLength,:] =  self.denormalize(history)
             for i in range(length):
-                noise = np.random.uniform(-1,1,size=[1, self.noiseLength])
+                noise = np.random.normal(0,0.05,size=[1, self.noiseLength])
                 noise_1 = np.random.uniform(-1,1,size=[1, self.noiseLength_1])
                 result = np.zeros((1,1,1))
                 for k in range(1):
@@ -343,11 +375,11 @@ class lstm_cond_gan(object):
                 result_ave = np.mean(result,0)
                 r = generated_orders[j:j+1,self.historyLength + i*step_size - 1,0] + result_ave
                 generated_orders[j,self.historyLength + i * step_size : self.historyLength+(i+1)*step_size,0] =  r
-                history = (np.round(generated_orders[j:j+1,self.historyLength+ (i+1)*step_size -1,0]/10000) - 11.5)/11.5
+                history = (np.floor(generated_orders[j:j+1,self.historyLength+ (i+1)*step_size -1,0]/10000) - 11.5)/11.5
                 history_full = np.mean(self.normalize(generated_orders[j:j+1,(i+1)*step_size : self.historyLength+ (i+1)*step_size,2:]),1)
                 if history > 1:
                     break
-                if(i % 1000 == 0 ):
+                if(i % 100 == 0 ):
                     print(str(j)+' runs ' + str(i)+' steps')
                     print(result_ave,history*11.5 + 11.5)
         np.save(save_path,generated_orders)
