@@ -1,5 +1,9 @@
 # class market used in the GAN prediction
 # update the current orderbook based on the prediction process
+import bisect
+import operator
+import numpy as np
+
 
 class Market:
     order_book_sell = {}
@@ -7,6 +11,18 @@ class Market:
 
     lowest_sell = None
     highest_buy = None
+
+    def __init__(self, order_book_sell=None, order_book_buy=None):
+        if order_book_sell != None and order_book_buy != None:
+            self.order_book_sell = order_book_sell
+            self.order_book_buy = order_book_buy
+            self.lowest_sell = min(self.order_book_sell)
+            self.highest_buy = max(self.order_book_buy)
+        else:
+            self.order_book_sell = {}
+            self.order_book_buy = {}
+            self.lowest_sell = None
+            self.highest_buy = None
 
     def get_lowest_sell(self):
         if self.order_book_sell == {}:
@@ -181,3 +197,198 @@ class Market:
 
 
 
+class Market_sim:
+    order_book_sell = {}
+    order_book_buy = {}
+
+    lowest_sell = None
+    highest_buy = None
+
+    def __init__(self, order_book_sell=None, order_book_buy=None):
+        if order_book_sell != None and order_book_buy != None:
+            self.order_book_sell = order_book_sell
+            self.order_book_buy = order_book_buy
+            self.lowest_sell = min(self.order_book_sell)
+            self.highest_buy = max(self.order_book_buy)
+        else:
+            self.order_book_sell = {}
+            self.order_book_buy = {}
+            self.lowest_sell = None
+            self.highest_buy = None
+
+    def get_lowest_sell(self):
+        if self.order_book_sell == {}:
+            return None
+        return min(self.order_book_sell)
+
+    def get_highest_buy(self):
+        if self.order_book_buy == {}:
+            return None
+        return max(self.order_book_buy)
+
+    def print_market(self):
+        print("Current order book")
+
+        print("sell order: (price,quantity) lowest is "+str(self.lowest_sell))
+        for order in self.order_book_sell:
+            print(str(order) + " " + str(self.order_book_sell[order]))
+        print("buy order: (price,quantity) highest is "+str(self.highest_buy))
+        for order in self.order_book_buy:
+            print(str(order) + " " + str(self.order_book_buy[order]))
+
+    def processing_bid(self, price, quantity):
+        # if there is no remaining offer, leave the bid in the market
+        if self.order_book_sell == {}:
+            self.place_bid(self, price, quantity)
+            return
+        if self.order_book_sell[self.lowest_sell] > quantity:
+            self.order_book_sell[self.lowest_sell] -= quantity
+            self.lowest_sell = self.get_lowest_sell()
+        elif self.order_book_sell[self.lowest_sell] == quantity:
+            self.order_book_sell.pop(self.lowest_sell)
+            self.lowest_sell = self.get_lowest_sell()
+        else:
+            remaining_quantity = quantity - self.order_book_sell[self.lowest_sell]
+            self.order_book_sell.pop(self.lowest_sell)
+            self.lowest_sell = self.get_lowest_sell()
+
+            if self.order_book_sell == {}:
+                self.place_bid(price, remaining_quantity)
+                return
+            if price >= self.lowest_sell:
+                self.processing_bid(price, remaining_quantity)
+            else:
+                self.place_bid(price, remaining_quantity)
+
+    def place_bid(self, price, quantity):
+        if price in self.order_book_buy:
+            self.order_book_buy[price] += quantity
+        else:
+            self.order_book_buy[price] = quantity
+        self.highest_buy = self.get_highest_buy()
+
+    def processing_ask(self, price, quantity):
+        # if there is no remaining offer, leave the ask in the market
+        if self.order_book_buy == {}:
+            self.place_ask(self, price, quantity)
+            return
+        if self.order_book_buy[self.highest_buy] > quantity:
+            self.order_book_buy[self.highest_buy] -= quantity
+            self.highest_buy = self.get_highest_buy()
+        elif self.order_book_buy[self.highest_buy] == quantity:
+            self.order_book_buy.pop(self.highest_buy)
+            self.highest_buy = self.get_highest_buy()
+        else:
+            remaining_quantity = quantity - self.order_book_buy[self.highest_buy]
+            self.order_book_buy.pop(self.highest_buy)
+            self.highest_buy = self.get_highest_buy()
+
+            if self.order_book_buy == {}:
+                self.place_ask(price, remaining_quantity)
+
+                return
+            if price <= self.highest_buy:
+                self.processing_ask(price, remaining_quantity)
+            else:
+                self.place_ask(price, remaining_quantity)
+
+    def place_ask(self, price, quantity):
+        if price in self.order_book_sell:
+            self.order_book_sell[price] += quantity
+        else:
+            self.order_book_sell[price] = quantity
+        self.lowest_sell = self.get_lowest_sell()
+
+    # find the most similar order for cancel
+    def cancel_buy(self, price, quantity):
+        if self.order_book_buy == {}:
+            return None
+
+        # if the price are not avaliable
+        if price not in self.order_book_buy:
+            return
+
+        # if there is enough quantity
+        if self.order_book_buy[price] > quantity:
+            self.order_book_buy[price] -= quantity
+        else:
+            quantity = self.order_book_buy[price]
+            self.order_book_buy.pop(price)
+            self.highest_buy = self.get_highest_buy()
+
+        return price, quantity
+
+    def cancel_sell(self, price, quantity):
+        if self.order_book_sell == {}:
+            return None
+
+        # if the price are not avaliable
+        if price not in self.order_book_sell:
+            return
+
+        # if there is enough quantity
+        if self.order_book_sell[price] > quantity:
+            self.order_book_sell[price] -= quantity
+        else:
+            quantity = self.order_book_sell[price]
+            self.order_book_sell.pop(price)
+            self.lowest_sell = self.get_lowest_sell()
+
+        return price, quantity
+
+
+    def update(self, order):
+        type = order[0]
+
+        price = order[2]
+        quantity = order[3]
+
+        # buy order
+        if type == 0:
+            if self.order_book_sell == {}:
+                self.place_bid(price, quantity)
+                return
+            # if there is a matching offer
+            if price >= self.lowest_sell:
+                self.processing_bid(price, quantity)
+            else:
+                self.place_bid(price, quantity)
+        elif type == 1:
+            if self.order_book_buy == {}:
+                self.place_ask(price, quantity)
+                return
+            # if there is a matching offer
+            if price <= self.highest_buy:
+                self.processing_ask(price, quantity)
+            else:
+                self.place_ask(price, quantity)
+        elif type == 2:
+            return self.cancel_buy(price, quantity)
+
+        elif type == 3:
+            return self.cancel_sell(price, quantity)
+
+        # check if a transaction happened
+        return
+
+    def get_10_level(self):
+
+        order_book = np.zeros((20,2))
+
+        sorted_buy = sorted(self.order_book_buy.items(), key=operator.itemgetter(0))
+        sorted_sell = sorted(self.order_book_sell.items(), key=operator.itemgetter(0))
+        if len(self.order_book_sell) < 10 or len(self.order_book_buy) < 10:
+            print("lack of data")
+            return order_book
+        else:
+            for i in range(10):
+                price = sorted_sell[i][0] / 100
+                quantity = sorted_sell[i][1]
+                order_book[i+10][0] = price
+                order_book[i+10][1] = quantity
+            for i in range(10):
+                price = sorted_buy[len(sorted_buy)-1-i][0] / 100
+                quantity = sorted_buy[len(sorted_buy)-1-i][1]
+                order_book[i][0] = price
+                order_book[i][1] = quantity
+            return order_book
