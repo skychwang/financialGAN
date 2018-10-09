@@ -28,9 +28,9 @@ def get_cancel_order(order_filename):
     """
     get cancelled orders from 'order_filename', save these orders in tgt_path
     """
-    src_path = os.path.join('RMD/'+order_filename)
-    tgt_path = os.path.join('RMD/'+order_filename.replace('Raw','Cancel'))
-    trd_path = os.path.join('RMD/'+ order_filename.replace('Order_Raw','TRD'))
+    src_path = os.path.join('GOOG/'+order_filename)
+    tgt_path = os.path.join('GOOG/'+order_filename.replace('Raw','Cancel'))
+    trd_path = os.path.join('GOOG/'+ order_filename.replace('Order_Raw','TRD'))
 
 
     example = pd.read_excel(src_path)
@@ -50,7 +50,7 @@ def get_cancel_order(order_filename):
     cancel_ord.to_excel(tgt_path,index=False)
 
 def order_cancel_multiple_days():
-	raw_orders = [file for file in os.listdir("RMD/") if file.startswith("PN_Order")]
+	raw_orders = [file for file in os.listdir("GOOG/") if file.startswith("GOOG_Order")]
 	for raw_order in raw_orders:
 		get_cancel_order(raw_order)
 
