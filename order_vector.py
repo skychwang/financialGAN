@@ -9,10 +9,10 @@ import pandas as pd
 def order_aggregation_multiple_days():
 	raw_orders = [file for file in os.listdir("RMD/") if file.startswith("PN_Order_Raw")]
 	for raw_order in raw_orders:
-		order_aggregation_one_day("output/",raw_order, time_interval=100)
+		order_aggregation_one_day("output/",raw_order, time_interval=1)
 	raw_orders = [file for file in os.listdir("RMD/") if file.startswith("PN_Order_Cancel")]
 	for raw_order in raw_orders:
-		order_aggregation_one_day("output_cancel/",raw_order, time_interval=100)
+		order_aggregation_one_day("output_cancel/",raw_order, time_interval=1)
 
 
 def order_aggregation_one_day(out_dir,order_filename, time_interval=100):
