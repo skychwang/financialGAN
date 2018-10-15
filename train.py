@@ -12,6 +12,8 @@ from order_vector import *
 from functools import partial
 from discrimination import *
 
+
+# this is following Improved WGAN
 class RandomWeightedAverage(_Merge):
     def _merge_function(self, inputs):
         weights = K.random_uniform((64, 1, 1,1))
@@ -20,7 +22,7 @@ class RandomWeightedAverage(_Merge):
 class lstm_cond_gan(object):
     """ This defines the GAN for training stock market simulator
     Arguments:
-    orderLength: integer, length of one order
+    orderLength: integer, length of one order (all features of order such as price, quantity, time diff(2), types, best bid/ask(4))
     historyLength: integer, number of past orders used as history
     noiseLength: integer, length of noise vector
     lstm_out_length: integer, length of embedding vector of history
@@ -29,7 +31,7 @@ class lstm_cond_gan(object):
     batch_size: integer, number of orders within one batch
     """
     def __init__(self, orderLength=9, historyLength=20,\
-            noiseLength = 100, lstm_out_length=9, mini_batch_size=1,\
+            noiseLength=100, lstm_out_length=9, mini_batch_size=1,\
         data_path=None, batch_size=64):
         self.orderLength = orderLength
         self.historyLength = historyLength
@@ -40,7 +42,8 @@ class lstm_cond_gan(object):
         self.batch_size = batch_size
         self.model = None
         self.build()
-
+		
+	# this is following Improved WGAN
     def gradient_penalty_loss(self,y_true, y_pred, averaged_samples, \
         gradient_penalty_weight):
         gradients = K.gradients(y_pred, averaged_samples)[0]
@@ -65,11 +68,11 @@ class lstm_cond_gan(object):
         if self.model:
             return self.model
 
-        ##################### Input ############################################
+        ##################### Input for both Generator and Critic ############################################
         # history orders of shape (self.historyLength, self.orderLength)
         history = Input(shape=(self.historyLength, self.orderLength), \
             name='history_full')
-        # current time: Integer, from 0 to 23
+        # current time slot: Integer, from 0 to 23
         history_input = Input(shape=(1,), name='history_time')
         # noise input of shape (self.noiseLength)
         noise_input_1 = Input(shape=(self.noiseLength,), name='noise_input_1')
@@ -78,12 +81,13 @@ class lstm_cond_gan(object):
         truth_input = Input(shape=(self.mini_batch_size,self.orderLength,1),name='truth_input')
 
 
-        # lstm at Discriminator to extract history orders features
+        # lstm at Generator to extract history orders features
         lstm_output = LSTM(self.lstm_out_length)(history)
+		
         # lstm at Critic to extract history orders features
         lstm_output_h = LSTM(self.lstm_out_length,name='lstm_critic')(history)
 
-        # merge history features with noise
+        # concatenate history features with noise
         gen_input = Concatenate(axis=-1)([history_input,lstm_output,noise_input_1])
 
         ####################### Generator ######################################
@@ -137,12 +141,15 @@ class lstm_cond_gan(object):
 
         # extract the last best bid/ask from history as the history of CDA
         orderbook_history = Lambda(lambda x: x[:,-1,5:], output_shape=(4,))(history)
+		# gen_output_1 is output of generator
         gen_output_reshaped = Reshape((self.orderLength-4,))(gen_output_1)
+		# remove time as it is not needed for CDA network
         gen_output_without_time = Lambda(lambda x: x[:,1:], output_shape=(4,))(gen_output_reshaped)
-        cda_input = Concatenate(axis=1)([gen_output_without_time,orderbook_history])
+		cda_input = Concatenate(axis=1)([gen_output_without_time,orderbook_history])
         gen_output_2 = G_2(cda_input)
 
-        #Output of Generator, shape(self.mini_batch_size, self.orderLength)
+        #Output of Generator, shape(self.mini_batch_size, self.orderLength) concatentated with output
+		# of the CDA network to get final output 
         gen_output = Concatenate(axis=2)([gen_output_1,\
             Reshape((self.mini_batch_size, 4, 1))(generator_output_2)])
 
@@ -154,7 +161,7 @@ class lstm_cond_gan(object):
         discriminator_input_truth = Concatenate(axis=2)\
             ([Reshape((1, 1,1))(history_input), \
             Reshape((1, self.lstm_out_length,1))(lstm_output_h), truth_input])
-        #random-weighted average of real and generated samples
+        #random-weighted average of real and generated samples - following Improved WGAN work
         averaged_samples = RandomWeightedAverage()\
             ([discriminator_input_fake, discriminator_input_truth])
 
@@ -184,7 +191,7 @@ class lstm_cond_gan(object):
         partial_gp_loss.__name__ = 'gradient_penalty'
 
         ########################### Model Definition  ##########################
-        #Generator model
+        # Generator model
         # Input: [history_input,history,noise_input_1]
         # Output: gen_output
         self.gen = Model(inputs=[history_input,history,noise_input_1], outputs= gen_output)
@@ -201,14 +208,14 @@ class lstm_cond_gan(object):
         #Generator
         self.gen.compile(optimizer=optimizer, loss='binary_crossentropy')
         self.gen.summary()
-        #Model Truth
+        #Model Truth - Generator is not trainable here
         for layer in self.model_truth.layers:
             layer.trainable = False
         self.model_truth.get_layer(name='discriminator').trainable = True
         self.model_truth.get_layer(name='lstm_critic').trainable = True
         self.model_truth.compile(optimizer=optimizer, \
             loss=[self.w_loss,self.w_loss,partial_gp_loss])
-        #Model Fake
+        #Model Fake - critic is not trainable here
         for layer in self.model_fake.layers:
             layer.trainable = True
         self.model_fake.get_layer(name='discriminator').trainable = False
@@ -218,18 +225,21 @@ class lstm_cond_gan(object):
         self.model_fake.summary()
         self.model_truth.summary()
 
-    def fit(self, train_steps=300001, buy_sell_tag=0, batch_size=64, gnr_path='gnr'):
+	# gnr_path = path to save generator model
+    def fit(self, train_steps=300001, batch_size=64, gnr_path='gnr'):
         #import data
         data = np.load(self.data_path, mmap_mode='r')
 
 
         for i in range(train_steps):
+			# postive_y and negative_y go ultimately into the loss functions
             positive_y = np.ones((batch_size, 1), dtype=np.float32)
             negative_y = -positive_y
+			# dummy_y goes as y_true in gradient_penalty_loss
             dummy_y = np.zeros((batch_size, 1), dtype=np.float32)
             noise = np.random.uniform(-1, 1 , size=[data.shape[0],batch_size, self.noiseLength])
 
-            for j in range(100):
+            for j in range(100): # critic trained 100 times
                 #Get one sample from index
                 idx = np.random.randint(0, data.shape[0])
                 # Get Noise
@@ -329,6 +339,7 @@ class lstm_cond_gan(object):
             Array[:,:,i] = normalize_one_dim(normArray[:,:,i],maxV=maxV[i],minV=minV[i])
         return Array
 
+	# length is the maximum number of orders outputted in 1 run
     def predict(self,save_path='predict_goog23_28000.npy',length=600000,step_size=1,num_runs=1):
 
         #Load Data
@@ -357,6 +368,7 @@ class lstm_cond_gan(object):
                 r = generated_orders[j:j+1,self.historyLength + i*step_size - 1,0] + orderStreams[0,:,:1]
                 generated_orders[j,self.historyLength + i * step_size : self.historyLength+(i+1)*step_size,0] =  r
 
+				# 11.5 corresponds to 23 time slots
                 history = (np.floor(generated_orders[j:j+1,self.historyLength+ (i+1)*step_size -1,0]/1000000) - 11.5)/11.5
                 history_full = self.normalize(generated_orders[j:j+1,(i+1)*step_size : self.historyLength+ (i+1)*step_size,:].copy())[:,:,1:]
 
