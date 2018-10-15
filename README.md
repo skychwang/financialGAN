@@ -1,2 +1,2 @@
 # financialGAN  
-Hullo world
+Hello world
