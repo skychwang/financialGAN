@@ -12,7 +12,8 @@ def  get_multiple_days_npy():
     print('Start transfer json to npy:')
     read_json_agg.read_multiple_days_data(out_dir='GOOG_output/output/'\
         ,out_cancel_dir='GOOG_output/output_cancel/',tgt_dir='NPY_goog12_new/')
-    read_json_agg.aggregate_multi_days_data(dirPath='NPY_goog12_new/')
+    #To do: concatenate with best bid/ask
+    read_json_agg.aggregate_multi_days_data(dirPath='NPY_goog12_new/',saveName='agg_data.npy')
 
 #Train GAN
 def Train():

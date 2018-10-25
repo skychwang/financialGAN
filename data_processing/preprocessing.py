@@ -12,6 +12,10 @@ def read_one_day_data(out_path,out_cancel_path):
     out_path: path of submission file
     out_cancel_path: path of cancellation file
     """
+    #Some consts:
+    minPrice = 6
+    maxPrice = 9
+
     #Read submission and cancellation
     order = pd.read_json(out_path,orient='records',lines=True)
     order_cancel = pd.read_json(out_cancel_path,orient='records',lines=True)
@@ -44,17 +48,17 @@ def read_one_day_data(out_path,out_cancel_path):
     for i in range(len(buy_vector)):
         time = time_index[i] - 1
         for price,size in buy_vector[i].items():
-            buy_sell_array.append([time,0,0,6 + float(price)/100 ,size])
+            buy_sell_array.append([time,0,0,minPrice + float(price)/100 ,size])
 
         for price,size in sell_vector[i].items():
-            buy_sell_array.append([time,1,0,9 + float(price)/100 ,size])
+            buy_sell_array.append([time,1,0,maxPrice + float(price)/100 ,size])
     #Represent each cancellation as a vector: [time,type(2-dim),price,quantity]
     for i in range(len(buy_cancel_vector)):
         time = time_index_cancel[i] - 1
         for price,size in buy_cancel_vector[i].items():
-            buy_sell_array.append([time,0,1,6 + float(price)/100 ,size])
+            buy_sell_array.append([time,0,1,minPrice + float(price)/100 ,size])
         for price,size in sell_cancel_vector[i].items():
-            buy_sell_array.append([time,1,1,9 + float(price)/100 ,size])
+            buy_sell_array.append([time,1,1,maxPrice + float(price)/100 ,size])
 
     #Sort orders by time
     data = np.expand_dims(np.array(sorted(buy_sell_array,key=lambda x: (x[0],x[2]) )),-1)
@@ -99,7 +103,11 @@ def read_multiple_days_data(out_dir,out_cancel_dir,tgt_dir,isTraing=True):
         else:
             np.save(tgt_path,read_one_day_data(raw_path,cancel_path))
 
-def reshape_data(buy_sell_array, history=100,order_stream=1,step_size=1,batch_size=64):
+#Notice: order_size here becomes 10, which is different from the output of
+#read_one_day_data, this is because best bid/ask information are added here,
+#which is generated in a seperate function.
+def reshape_data(buy_sell_array, history=100,order_stream=1,\
+        step_size=1,batch_size=64,order_size = 10):
     """
     This function is used to reshape data to be ready for training
     Inputs:
@@ -108,12 +116,13 @@ def reshape_data(buy_sell_array, history=100,order_stream=1,step_size=1,batch_si
     order_stream: number of orders the generator generate
     step_size: minimum distance between two order samples(history + order_stream)
     batch_size: number of orders in one batch
+    order_size: dimension of one order
     """
-    #Compute the number of possible samples and discard unused orders
+    #Compute the number of samples that can be formed and discard unused orders
     num_samples = int(np.floor((buy_sell_array.shape[0]-history \
         - order_stream + step_size)/(step_size)));
     #Reshape array into shape (num_samples,sample)
-    buy_sell_trun = np.zeros((num_samples, order_stream + history,10,1))
+    buy_sell_trun = np.zeros((num_samples, order_stream + history,order_size,1))
     for i in range(num_samples):
             buy_sell_trun[i,:,:,:] = \
                 buy_sell_array[step_size*i:step_size*i+history+order_stream,:,:]
@@ -125,24 +134,26 @@ def reshape_data(buy_sell_array, history=100,order_stream=1,step_size=1,batch_si
         buy_sell = np.concatenate((buy_sell,buy_sell_trun[i::num_groups]))
     #Compute #batches and discard unused samples
     num_batches = int(np.floor((buy_sell.shape[0])/(batch_size)))
-    buy_sell_output = np.zeros((num_batches,batch_size, order_stream + history,10,1))
+    buy_sell_output = np.zeros((num_batches,batch_size, order_stream + history,order_size,1))
     for i in range(num_batches):
         buy_sell_output[i,:,:,:,:] = buy_sell[i*batch_size:(i+1)*batch_size,:,:,:]
 
     return buy_sell_output
 
-def aggregate_multi_days_data(dirPath):
+def aggregate_multi_days_data(dirPath,saveName):
     """
     This function aggregate orders of multiple days
     Inputs:
     dirPath: directory including each day's file
+    saveName: name of the saved file
     """
-    raw_path = [file for file in os.listdir(dirPath) if file.endswith("_1.npy")]
+    fileRecognizer = '_1.npy'
+    raw_path = [file for file in os.listdir(dirPath) if file.endswith(fileRecognizer)]
     #Sort files in lexicographical order
-    raw_path.sort(key= lambda file:int(file[2:4]))
+    #raw_path.sort(key= lambda file:int(file[2:4]))
     #Concatenate all days' data
     raw_data = np.load(dirPath + raw_path[0])
     for i in range(1,len(raw_path)):
         raw_data = np.concatenate((raw_data,np.load(dirPath  + raw_path[i])))
     raw_data = raw_data.astype(float)
-    np.save(dirPath+"agg_data.npy',raw_data)
+    np.save(dirPath+saveName,raw_data)
