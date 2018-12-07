@@ -84,7 +84,8 @@ def get_cda_numpy(folder_name,file_name, initialization=None):
         final = np.concatenate([order_list[i], before, after])
         final_file[i, :, :] = final
 
-    np.save("cda"+file_name, final_file)
+    position = [0,1,2,3,4,5,9,10,29,30]
+    np.save("cda"+file_name, final_file[:,position,:])
 
 def get_cda_data(folder_name):
     """
