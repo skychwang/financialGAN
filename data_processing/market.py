@@ -2,7 +2,7 @@ import bisect
 import operator
 import numpy as np
 
-
+# This is running the CDA
 class Market:
     order_book_sell = {}
     order_book_buy = {}
@@ -167,7 +167,7 @@ class Market:
 
         # if the price are not available
         if price not in self.order_book_buy:
-            # find most similar price
+            # find most similar price in the loop below
             similar_price = list(self.order_book_buy.keys())[0]
             smallest_diff = abs(similar_price - price)
             for order_price in self.order_book_buy:
@@ -199,7 +199,7 @@ class Market:
 
         # if the price are not available
         if price not in self.order_book_sell:
-            # find most similar price
+            # find most similar price in the loop below
             similar_price = list(self.order_book_sell.keys())[0]
             smallest_diff = abs(similar_price - price)
             for order_price in self.order_book_sell:

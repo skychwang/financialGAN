@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 import math
 
+# This file computes distance between distributions
+
 def fit_geo_dist(p, size):
     """
         Given p and size, fit a geometric distribution
@@ -124,6 +126,10 @@ def get_type(order):
     return type
 
 
+# real_file is real data
+# fake_file is generated data
+# min_p and max_p are the actual min and max price from real data
+# bin_size is size of bin for price
 def test_price(real_file,fake_file, min_p, max_p, bin_size=0.01):
     """
         Compare generated data with fitted data
@@ -132,6 +138,7 @@ def test_price(real_file,fake_file, min_p, max_p, bin_size=0.01):
     price_list = read_real_price(real_file)
     hist, bin_edges = np.histogram(price_list, bins=np.arange(min_p, max_p+bin_size, bin_size))
     sum_hist = sum(hist)
+	# pdf - not a cdf (forgot to change name)
     real_cdf_dist = [i /sum_hist for i in hist]
 
 
@@ -160,6 +167,7 @@ def test_price(real_file,fake_file, min_p, max_p, bin_size=0.01):
     print(sum([abs(fake_cdf_dist[i]-real_cdf_dist[i]) for i in range(len(fitted_dist))]))
 
 
+# interarrival time
 def test_interval(real_file,fake_file,max_interval=1000):
     """
         Compare generated data with fitted data
@@ -176,6 +184,7 @@ def test_interval(real_file,fake_file,max_interval=1000):
     fitted_dist = (fit_geo_dist(p, max_interval))
 
     #plot_geo_dist(hist[:1000], p, 1000)
+	# distance between fitted and real
     print("Interval: real-fit")
     print(sum([abs(fitted_dist[i]-real_cdf_dist[i]) for i in range(len(fitted_dist))]))
 
@@ -187,6 +196,7 @@ def test_interval(real_file,fake_file,max_interval=1000):
     fake_cdf_dist = (normalized_hist)[:max_interval]
 
 
+	# distance between generated and real
     print("Interval: real-fake")
     print(sum([abs(fake_cdf_dist[i]-real_cdf_dist[i]) for i in range(len(fitted_dist))]))
 

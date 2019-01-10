@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 
+# extract cancellations from real data
 def detect_cancel(value):
     """
     Find orders that are cancelled or transacted
@@ -9,6 +10,7 @@ def detect_cancel(value):
     length = value.shape[0] #the length of the group
     cancel_df = pd.DataFrame(columns=value.columns)
     for i in range(1,length):
+		# if the quantity for this order id decreased, then this is a candidate cancellation
         if(value.iloc[i]['SIZE']<value.iloc[i-1]['SIZE']):
             tmp_order = value.iloc[i]
             tmp_order['SIZE'] = value.iloc[i-1]['SIZE'] - value.iloc[i]['SIZE']

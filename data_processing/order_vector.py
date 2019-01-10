@@ -6,7 +6,9 @@ import numpy as np
 import os
 import pandas as pd
 
+# This file converts from excel to json
 def order_aggregation_multiple_days():
+	# filename will change with different stock
 	raw_orders = [file for file in os.listdir("RMD/") if file.startswith("PN_Order_Raw")]
 	for raw_order in raw_orders:
 		order_aggregation_one_day("output/",raw_order, time_interval=1)
@@ -20,6 +22,7 @@ def order_aggregation_one_day(out_dir,order_filename, time_interval=100):
 	time_vector = []
 
 	# TO-DO preprocessing to find min_max range 600 1200 900 1500
+	# This should come from find_max_min.py
 	buy_min = 600
 	buy_max = 1200
 	buy_vector = []
@@ -27,12 +30,14 @@ def order_aggregation_one_day(out_dir,order_filename, time_interval=100):
 	sell_max = 1500
 	sell_vector = []
 
+	# month date and year from the filename
 	parse_time = order_filename.split("_")[3].split(".")[0]
 	month = int(parse_time[:2])
 	date = int(parse_time[2:4])
 	year = 2000 + int(parse_time[4:6])
 	save_filename =  out_dir + parse_time + "_" + str(time_interval) + ".json"
 
+	
 	time_start = datetime.datetime(year, month, date, 9, 30, 0, 000000)
 	time_end = time_start + datetime.timedelta(microseconds = time_interval * 1000)
 

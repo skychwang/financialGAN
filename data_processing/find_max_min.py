@@ -6,9 +6,11 @@ import matplotlib.pyplot as plt
 
 def get_max_min_of_multiple_days():
     """
-        Find the min and max price from orderbooks
+        Find the min and max price from orderbooks (real data)
     """
     # get a list of filenames
+	# "RMD/PN_OB/" is where PN files live. Put approriate folder to get the required files
+	# Each file in the array order_books is one day of order book data
     order_books = [file for file in os.listdir("RMD/PN_OB/") if file.startswith("PN_OB")]
 
     # set initial value of max and min
