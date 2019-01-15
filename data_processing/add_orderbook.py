@@ -2,7 +2,7 @@ from market import *
 import numpy as np
 import os
 import ast
-import reshape_data
+import preprocessing
 
 
 def convert_order(order):
@@ -86,7 +86,7 @@ def get_cda_numpy(folder_name,file_name, initialization=None):
         final_file[i, :, :] = final
 
     position = [0,1,2,3,4,5,9,10,29,30]
-    np.save("cda"+file_name, reshape_data(final_file[:,position,:],history=20))
+    np.save("cda"+file_name, preprocessing.reshape_data(final_file[:,position,:],history=20))
 
 def get_cda_data(folder_name):
     """
