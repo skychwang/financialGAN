@@ -7,8 +7,6 @@ from keras.layers.merge import _Merge
 from keras.layers import *
 from keras.optimizers import RMSprop, Adam
 
-from read_json import *
-from order_vector import *
 from functools import partial
 from discrimination import *
 
@@ -42,7 +40,7 @@ class lstm_cond_gan(object):
         self.batch_size = batch_size
         self.model = None
         self.build()
-		
+
 	# this is following Improved WGAN
     def gradient_penalty_loss(self,y_true, y_pred, averaged_samples, \
         gradient_penalty_weight):
@@ -83,7 +81,7 @@ class lstm_cond_gan(object):
 
         # lstm at Generator to extract history orders features
         lstm_output = LSTM(self.lstm_out_length)(history)
-		
+
         # lstm at Critic to extract history orders features
         lstm_output_h = LSTM(self.lstm_out_length,name='lstm_critic')(history)
 
@@ -149,9 +147,9 @@ class lstm_cond_gan(object):
         gen_output_2 = G_2(cda_input)
 
         #Output of Generator, shape(self.mini_batch_size, self.orderLength) concatentated with output
-		# of the CDA network to get final output 
+		# of the CDA network to get final output
         gen_output = Concatenate(axis=2)([gen_output_1,\
-            Reshape((self.mini_batch_size, 4, 1))(generator_output_2)])
+            Reshape((self.mini_batch_size, 4, 1))(gen_output_2)])
 
         ##################### Critic ###########################################
         # Input of Critic, merge history_input, lstm_output_h and gen_output/truth_input
@@ -265,9 +263,9 @@ class lstm_cond_gan(object):
             #Logging
             log_mesg = "%d: [D_fake loss: %f,D_truth loss: %f] " % (i, d_loss[0],d_loss[1])
             log_mesg = "%s  [A loss: %f]" % (log_mesg, a_loss)
-            with open('log_goog_new07.txt','a') as f:
+            with open('log_goog.txt','a') as f:
                 f.write(log_mesg+'\n')
-                f.close())
+                f.close()
             if i % 1000 == 0:
                 self.gen.save(gnr_path+'_'+str(i))
 
@@ -276,7 +274,9 @@ class lstm_cond_gan(object):
             return ((((data - high) * (maxV - minV))/(high - low)) + maxV)
 
         Array = normArray.copy()
-
+        # 10 dims: [inter-arrival time;buy/sell;cancel/not cancel/;price;
+        #           quantity;best bid price;best ask price;best bid quantity;
+        #           best ask quantity]
         # MinMax Values for different dataset
         #New_rep
         maxV =  [16500,1,1,942,150,942,942,3000,3000]
@@ -340,7 +340,7 @@ class lstm_cond_gan(object):
         return Array
 
 	# length is the maximum number of orders outputted in 1 run
-    def predict(self,save_path='predict_goog23_28000.npy',length=600000,step_size=1,num_runs=1):
+    def predict(self,save_path='predict_goog.npy',length=600000,step_size=1,num_runs=1):
 
         #Load Data
         data = np.load(self.data_path, mmap_mode='r')
