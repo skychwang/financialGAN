@@ -7,6 +7,9 @@ import train_no_cda as GAN
 import train_no_best as GAN_1
 import train_no_time as GAN_2
 import train_no_cda_new as GAN_3
+import train_dcgan as GAN_4
+import train_para as GAN_5
+import train_sn as GAN_6
 
 # excel --- json
 # def get_multiple_days_json():
@@ -22,8 +25,8 @@ import train_no_cda_new as GAN_3
 
 #Train GAN
 def Train():
-    gan = GAN.lstm_cond_gan(data_path='NPY_1/agg_data.npy')
-    gan.fit(gnr_path='gnr_no_cda')
+    gan = GAN_2.lstm_cond_gan(data_path='SYN/syn_data_train.npy')
+    gan.fit(gnr_path='SYN/generator/gnr_sn_no_time')
     #gan.predict()
 
 if __name__ == '__main__':
