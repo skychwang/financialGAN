@@ -86,7 +86,7 @@ def read_multiple_days_data(out_dir,out_cancel_dir,tgt_dir,isTraing=True):
     tgt_dir: dir to save
     """
     #Read list of files
-    raw_orders = [file for file in os.listdir("out_dir") if file.endswith(".json")]
+    raw_orders = [file for file in os.listdir(out_dir) if file.endswith(".json")]
 
 
     for i in range(len(raw_orders)):
